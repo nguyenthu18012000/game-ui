@@ -228,7 +228,7 @@ export class LoginScene extends Phaser.Scene {
         this.errorText.setText("");
 
         // Chuyển sang LobbyScene
-        this.scene.start("LobbyScene");
+        this.scene.start("GameScene");
       } else {
         this.showError(result.error || "Đăng nhập thất bại");
       }

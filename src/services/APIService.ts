@@ -154,7 +154,9 @@ export class APIService {
         };
       }
 
-      const data: T = await response.json();
+      const responseBody = await response.json();
+      // Unwrap response envelope: { code, message, data } nếu có
+      const data: T = responseBody?.data !== undefined ? responseBody.data : responseBody;
       Logger.debug(`✓ ${method} ${endpoint}`, data);
 
       return {

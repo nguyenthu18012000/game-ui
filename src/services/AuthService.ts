@@ -25,16 +25,26 @@ export class AuthService {
         throw new Error(error.message || "Login failed");
       }
 
-      const data = await response.json();
+      const body = await response.json();
 
-      // Lưu token (response: { accessToken, refreshToken })
-      TokenService.saveTokens({
-        accessToken: data.accessToken,
-        refreshToken: data.refreshToken,
-      });
+      // Response được wrap: { code, message, data: { accessToken, refreshToken } }
+      const payload = body.data ?? body;
+      const accessToken =
+        payload.accessToken ?? payload.token ?? payload.access_token;
+      const refreshToken = payload.refreshToken ?? payload.refresh_token ?? undefined;
+
+      if (!accessToken) {
+        console.error(
+          "[AuthService] accessToken không tìm thấy trong response:",
+          body,
+        );
+        throw new Error("accessToken not found in response");
+      }
+
+      TokenService.saveTokens({ accessToken, refreshToken: refreshToken ?? undefined });
 
       Logger.info("Login successful");
-      return { success: true, data };
+      return { success: true, data: body };
     } catch (error: any) {
       Logger.error("Login error", error.message);
       return { success: false, error: error.message };
@@ -59,16 +69,26 @@ export class AuthService {
         throw new Error(error.message || "Registration failed");
       }
 
-      const data = await response.json();
+      const body = await response.json();
 
-      // Lưu token (response: { accessToken, refreshToken })
-      TokenService.saveTokens({
-        accessToken: data.accessToken,
-        refreshToken: data.refreshToken,
-      });
+      // Response được wrap: { code, message, data: { accessToken, refreshToken } }
+      const payload = body.data ?? body;
+      const accessToken =
+        payload.accessToken ?? payload.token ?? payload.access_token;
+      const refreshToken = payload.refreshToken ?? payload.refresh_token ?? undefined;
+
+      if (!accessToken) {
+        console.error(
+          "[AuthService] accessToken không tìm thấy trong response:",
+          body,
+        );
+        throw new Error("accessToken not found in response");
+      }
+
+      TokenService.saveTokens({ accessToken, refreshToken: refreshToken ?? undefined });
 
       Logger.info("Registration successful");
-      return { success: true, data };
+      return { success: true, data: body };
     } catch (error: any) {
       Logger.error("Register error", error.message);
       return { success: false, error: error.message };

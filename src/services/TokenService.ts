@@ -2,7 +2,7 @@ import { Logger } from "../utils/logger";
 
 export interface AuthTokens {
   accessToken: string;
-  refreshToken: string;
+  refreshToken?: string;
 }
 
 export interface TokenPayload {
