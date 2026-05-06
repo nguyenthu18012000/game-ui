@@ -108,7 +108,7 @@ export class MenuScene extends Phaser.Scene {
 
     playBtn.on("pointerdown", () => {
       Logger.info("MenuScene: Starting game");
-      this.scene.start("GameScene");
+      this.scene.start("LobbyScene");
     });
 
     // Logout Button

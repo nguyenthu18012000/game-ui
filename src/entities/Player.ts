@@ -1,176 +1,209 @@
 import * as Phaser from "phaser";
 import { Logger } from "../utils/logger";
 
-const COLORS = {
-  skin: 0xf5cba7,
-  hair: 0x4a2c0a,
-  shirt: 0x2e86de,
-  pants: 0x1a1a2e,
-  shoes: 0x3d2b1f,
-  weapon: 0xc0c0c0,
-  weaponHandle: 0x8b4513,
-  nameText: "#ffffff",
+// ─── Asset keys ───────────────────────────────────────────────────────────────
+
+export const PLAYER_ASSET_KEYS = {
+  HEAD:             "player-head",
+  BODY:             "player-body",
+  LEG:              "player-leg",
+  BODY_ANIM_PREFIX: "player-body-f",
+  LEG_ANIM_PREFIX:  "player-leg-f",
 };
+
+export const ANIM_FRAME_COUNT = 5;
+
+/** Serialisable animation state – ready for network (WebSocket / server sync) */
+export interface PlayerAnimState {
+  frame:           number;
+  isMoving:        boolean;
+  facingLeft:      boolean;
+  bodyIdleKey:     string;       // idle texture key
+  legIdleKey:      string;
+  bodyAnimPrefix:  string;       // walk animation prefix
+  legAnimPrefix:   string;
+  bodyAssetFolder: string | null; // null = default player assets
+  legAssetFolder:  string | null;
+}
+
+const COLORS = { weapon: 0xc0c0c0, weaponHandle: 0x8b4513, nameText: "#ffffff" };
+
+const HEAD_Y = -17, BODY_Y = 1, LEG_Y = 14;
+const HEAD_W = 26, HEAD_H = 22;
+const BODY_W = 30, BODY_H = 20;
+const LEG_W  = 30, LEG_H  = 16;
+
+const ANIM_FPS      = 8;
+const ANIM_FRAME_MS = 1000 / ANIM_FPS;
 
 export class Player extends Phaser.GameObjects.Container {
   public id: string;
   public playerName: string;
   declare body: Phaser.Physics.Arcade.Body;
 
-  private headGraphic!: Phaser.GameObjects.Graphics;
-  private torsoGraphic!: Phaser.GameObjects.Graphics;
-  private legsGraphic!: Phaser.GameObjects.Graphics;
+  private headSprite!:    Phaser.GameObjects.Image;
+  private bodySprite!:    Phaser.GameObjects.Image;
+  private legSprite!:     Phaser.GameObjects.Image;
   private weaponGraphic!: Phaser.GameObjects.Graphics;
-  private nameLabel!: Phaser.GameObjects.Text;
+  private nameLabel!:     Phaser.GameObjects.Text;
 
   private facingLeft = false;
+  private isMoving   = false;
 
-  constructor(
-    scene: Phaser.Scene,
-    x: number,
-    y: number,
-    id: string,
-    name: string,
-  ) {
+  private currentFrame   = 0;
+  private frameTimer     = 0;
+  private bodyIdleKey      = PLAYER_ASSET_KEYS.BODY;
+  private legIdleKey       = PLAYER_ASSET_KEYS.LEG;
+  private bodyAnimPrefix   = PLAYER_ASSET_KEYS.BODY_ANIM_PREFIX;
+  private legAnimPrefix    = PLAYER_ASSET_KEYS.LEG_ANIM_PREFIX;
+  private bodyAssetFolder: string | null = null;
+  private legAssetFolder:  string | null = null;
+
+  constructor(scene: Phaser.Scene, x: number, y: number, id: string, name: string) {
     super(scene, x, y);
     this.id = id;
     this.playerName = name;
-
     this.buildCharacter();
-
     scene.add.existing(this);
     scene.physics.add.existing(this);
-
-    const body = this.body as Phaser.Physics.Arcade.Body;
-    body.setSize(28, 52);
-    body.setOffset(-14, -26);
-    body.setCollideWorldBounds(true);
-
+    const physBody = this.body as Phaser.Physics.Arcade.Body;
+    physBody.setSize(28, 52);
+    physBody.setOffset(-14, -26);
+    physBody.setCollideWorldBounds(true);
+    scene.events.on(Phaser.Scenes.Events.UPDATE, this.tick, this);
     Logger.info(`Player created: ${name} (${id})`);
   }
 
   private buildCharacter() {
-    // --- Legs ---
-    this.legsGraphic = this.scene.add.graphics();
-    this.drawLegs();
-
-    // --- Torso ---
-    this.torsoGraphic = this.scene.add.graphics();
-    this.drawTorso();
-
-    // --- Head ---
-    this.headGraphic = this.scene.add.graphics();
-    this.drawHead();
-
-    // --- Weapon (held in right hand) ---
+    this.legSprite  = this.scene.add.image(0, LEG_Y,  this.legIdleKey).setDisplaySize(LEG_W, LEG_H);
+    this.bodySprite = this.scene.add.image(0, BODY_Y, this.bodyIdleKey).setDisplaySize(BODY_W, BODY_H);
+    this.headSprite = this.scene.add.image(0, HEAD_Y, PLAYER_ASSET_KEYS.HEAD).setDisplaySize(HEAD_W, HEAD_H);
     this.weaponGraphic = this.scene.add.graphics();
     this.drawWeapon();
-
-    // --- Name label ---
-    this.nameLabel = this.scene.add.text(0, -38, this.playerName, {
-      fontSize: "11px",
-      color: COLORS.nameText,
-      stroke: "#000000",
-      strokeThickness: 3,
-    });
-    this.nameLabel.setOrigin(0.5, 1);
-
-    this.add([
-      this.legsGraphic,
-      this.torsoGraphic,
-      this.headGraphic,
-      this.weaponGraphic,
-      this.nameLabel,
-    ]);
-  }
-
-  private drawHead() {
-    const g = this.headGraphic;
-    g.clear();
-    // Hair
-    g.fillStyle(COLORS.hair);
-    g.fillEllipse(0, -22, 22, 10);
-    // Face
-    g.fillStyle(COLORS.skin);
-    g.fillCircle(0, -16, 10);
-    // Eyes
-    g.fillStyle(0x000000);
-    g.fillCircle(this.facingLeft ? -3 : 3, -17, 2);
-    // Mouth
-    g.fillStyle(0xcc6666);
-    g.fillRect(this.facingLeft ? -5 : 1, -13, 4, 2);
-  }
-
-  private drawTorso() {
-    const g = this.torsoGraphic;
-    g.clear();
-    // Shirt
-    g.fillStyle(COLORS.shirt);
-    g.fillRect(-10, -8, 20, 18);
-    // Arms
-    g.fillStyle(COLORS.skin);
-    const armX = this.facingLeft ? 8 : -8;
-    g.fillRect(armX, -7, 6, 14); // back arm
-    g.fillStyle(COLORS.shirt);
-    g.fillRect(-armX - 6, -7, 6, 14); // front arm
-  }
-
-  private drawLegs() {
-    const g = this.legsGraphic;
-    g.clear();
-    // Pants
-    g.fillStyle(COLORS.pants);
-    g.fillRect(-9, 10, 8, 16);
-    g.fillRect(1, 10, 8, 16);
-    // Shoes
-    g.fillStyle(COLORS.shoes);
-    g.fillRect(-10, 24, 10, 5);
-    g.fillRect(0, 24, 10, 5);
+    this.nameLabel = this.scene.add
+      .text(0, -38, this.playerName, { fontSize: "11px", color: COLORS.nameText, stroke: "#000000", strokeThickness: 3 })
+      .setOrigin(0.5, 1);
+    this.add([this.legSprite, this.bodySprite, this.headSprite, this.weaponGraphic, this.nameLabel]);
   }
 
   private drawWeapon() {
     const g = this.weaponGraphic;
-    g.clear();
     const dir = this.facingLeft ? -1 : 1;
-    const wx = dir * 14;
-    // Handle
+    const wx  = dir * 14;
+    g.clear();
     g.fillStyle(COLORS.weaponHandle);
     g.fillRect(wx - 2 * dir, -4, 4, 10);
-    // Guard
     g.fillStyle(COLORS.weapon);
     g.fillRect(wx - 6 * dir, -4, 12, 3);
-    // Blade
     g.fillStyle(COLORS.weapon);
     g.fillRect(wx - 2 * dir, -20, 4, 16);
-    // Tip
     g.fillTriangle(wx - 2 * dir, -20, wx + 2 * dir, -20, wx, -28);
   }
 
-  private redrawAll() {
-    this.drawHead();
-    this.drawTorso();
-    this.drawWeapon();
+  private tick(_time: number, delta: number) {
+    if (!this.isMoving) return;
+    this.frameTimer += delta;
+    if (this.frameTimer >= ANIM_FRAME_MS) {
+      this.frameTimer -= ANIM_FRAME_MS;
+      this.currentFrame = (this.currentFrame + 1) % ANIM_FRAME_COUNT;
+      this.applyFrame();
+    }
+  }
+
+  private applyFrame() {
+    const f = this.currentFrame + 1;
+    this.bodySprite.setTexture(this.bodyAnimPrefix + f).setDisplaySize(BODY_W, BODY_H);
+    this.legSprite.setTexture(this.legAnimPrefix   + f).setDisplaySize(LEG_W,  LEG_H);
+  }
+
+  private applyIdle() {
+    this.bodySprite.setTexture(this.bodyIdleKey).setDisplaySize(BODY_W, BODY_H);
+    this.legSprite.setTexture(this.legIdleKey).setDisplaySize(LEG_W,   LEG_H);
+  }
+
+  setMoving(moving: boolean) {
+    if (this.isMoving === moving) return;
+    this.isMoving = moving;
+    if (!moving) {
+      this.currentFrame = 0;
+      this.frameTimer   = 0;
+      this.applyIdle();
+    }
   }
 
   faceLeft() {
-    if (!this.facingLeft) {
-      this.facingLeft = true;
-      this.redrawAll();
-    }
+    if (this.facingLeft) return;
+    this.facingLeft = true;
+    this.headSprite.setFlipX(true);
+    this.bodySprite.setFlipX(true);
+    this.legSprite.setFlipX(true);
+    this.drawWeapon();
   }
 
   faceRight() {
-    if (this.facingLeft) {
-      this.facingLeft = false;
-      this.redrawAll();
+    if (!this.facingLeft) return;
+    this.facingLeft = false;
+    this.headSprite.setFlipX(false);
+    this.bodySprite.setFlipX(false);
+    this.legSprite.setFlipX(false);
+    this.drawWeapon();
+  }
+
+  equipBody(spriteKey: string | null, animPrefix: string | null, assetFolder: string | null = null) {
+    this.bodyIdleKey      = spriteKey  ?? PLAYER_ASSET_KEYS.BODY;
+    this.bodyAnimPrefix   = animPrefix ?? PLAYER_ASSET_KEYS.BODY_ANIM_PREFIX;
+    this.bodyAssetFolder  = spriteKey ? assetFolder : null;
+    if (this.isMoving) this.applyFrame(); else this.applyIdle();
+  }
+
+  equipLegs(spriteKey: string | null, animPrefix: string | null, assetFolder: string | null = null) {
+    this.legIdleKey       = spriteKey  ?? PLAYER_ASSET_KEYS.LEG;
+    this.legAnimPrefix    = animPrefix ?? PLAYER_ASSET_KEYS.LEG_ANIM_PREFIX;
+    this.legAssetFolder   = spriteKey ? assetFolder : null;
+    if (this.isMoving) this.applyFrame(); else this.applyIdle();
+  }
+
+  /** Snapshot current animation state for network transmission. */
+  getAnimState(): PlayerAnimState {
+    return {
+      frame:           this.currentFrame,
+      isMoving:        this.isMoving,
+      facingLeft:      this.facingLeft,
+      bodyIdleKey:     this.bodyIdleKey,
+      legIdleKey:      this.legIdleKey,
+      bodyAnimPrefix:  this.bodyAnimPrefix,
+      legAnimPrefix:   this.legAnimPrefix,
+      bodyAssetFolder: this.bodyAssetFolder,
+      legAssetFolder:  this.legAssetFolder,
+    };
+  }
+
+  /**
+   * Apply animation state received from the server.
+   * Used to update remote players without triggering local movement logic.
+   */
+  applyAnimState(state: PlayerAnimState) {
+    this.isMoving         = state.isMoving;
+    this.currentFrame     = state.frame;
+    this.bodyIdleKey      = state.bodyIdleKey;
+    this.legIdleKey       = state.legIdleKey;
+    this.bodyAnimPrefix   = state.bodyAnimPrefix;
+    this.legAnimPrefix    = state.legAnimPrefix;
+    this.bodyAssetFolder  = state.bodyAssetFolder;
+    this.legAssetFolder   = state.legAssetFolder;
+    if (state.isMoving) this.applyFrame(); else this.applyIdle();
+    if (state.facingLeft !== this.facingLeft) {
+      this.facingLeft = state.facingLeft;
+      const flip = state.facingLeft;
+      this.headSprite.setFlipX(flip);
+      this.bodySprite.setFlipX(flip);
+      this.legSprite.setFlipX(flip);
+      this.drawWeapon();
     }
   }
 
-  changeEquipment(slot: string, _spriteKey: string) {
-    Logger.info(`${this.playerName}: Equipment changed - ${slot}`);
-  }
-
   destroy(fromScene?: boolean): void {
+    this.scene?.events?.off(Phaser.Scenes.Events.UPDATE, this.tick, this);
     super.destroy(fromScene);
   }
 }

@@ -1,43 +1,25 @@
 import * as Phaser from "phaser";
 import { Logger } from "../utils/logger";
 import { Player } from "../entities/Player";
-import {
-  CharacterService,
-  type CharacterDetail,
-} from "../services/CharacterService";
-import { SocketManager } from "../network/SocketManager";
+import type { CharacterDetail } from "../services/CharacterService";
 import { TileMapService } from "../services/TileMapService";
 import { TileMapRenderer } from "../services/TileMapRenderer";
-import { SOCKET_EVENTS } from "../constants/SocketEvents";
 import type { TileMap } from "../types/Tile";
 import type { PlayerData } from "../types/Player";
+import { SocketManager } from "../network/SocketManager";
+import { SOCKET_EVENTS } from "../constants/SocketEvents";
+import { EquipmentHUD, type HotbarSlot } from "../ui/EquipmentHUD";
 
 const SPEED = 160;
 const MOVEMENT_SYNC_INTERVAL = 50;
 const POSITION_EPSILON = 1;
 
-interface InputField {
-  container: Phaser.GameObjects.Container;
-  input: Phaser.GameObjects.Text;
-  value: string;
-  placeholder: string;
-}
-
 export class GameScene extends Phaser.Scene {
-  // Game state
-  private state: "loading" | "lobby" | "playing" = "loading";
-  private lobbyLoaded = false;
-
-  // Lobby UI
-  private lobbyUI!: Phaser.GameObjects.Container;
-  private createPopup!: Phaser.GameObjects.Container;
-  private characterNameInput!: InputField;
-  private popupErrorText!: Phaser.GameObjects.Text;
-  private isCreating = false;
+  // Character from LobbyScene
+  private character!: CharacterDetail;
 
   // Gameplay
   private player!: Player;
-  private currentCharacter: CharacterDetail | null = null;
   private socketManager: SocketManager | null = null;
   private remotePlayers = new Map<string, Player>();
   private lastMovementSync = 0;
@@ -60,276 +42,28 @@ export class GameScene extends Phaser.Scene {
   private farmCooldown = 0;
   private readonly FARM_COOLDOWN_TIME = 500; // 500ms between farms
 
+  // HUD
+  private equipmentHUD!: EquipmentHUD;
+
   constructor() {
     super({ key: "GameScene" });
   }
 
+  init(data: { character: CharacterDetail }) {
+    this.character = data.character;
+  }
+
   create() {
     Logger.info("GameScene created");
-    this.state = "loading";
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.cleanupSocket());
     this.events.once(Phaser.Scenes.Events.DESTROY, () => this.cleanupSocket());
-
-    // Only load lobby if not already loaded (prevent double-load on reload)
-    if (!this.lobbyLoaded) {
-      this.showLobby();
-    }
-  }
-
-  // ─── LOBBY ────────────────────────────────────────────────────────────────
-
-  private async showLobby() {
-    if (this.lobbyLoaded) return; // Prevent duplicate loading
-
-    const width = this.cameras.main.width;
-    const height = this.cameras.main.height;
-
-    this.lobbyUI = this.add.container(0, 0);
-
-    // Background
-    const bg = this.add.rectangle(
-      width / 2,
-      height / 2,
-      width,
-      height,
-      0x1a1a1a,
-    );
-    this.lobbyUI.add(bg);
-
-    // Title
-    const title = this.add
-      .text(width / 2, 50, "CHARACTER", {
-        fontSize: "36px",
-        fontFamily: "Arial",
-        color: "#ffffff",
-      })
-      .setOrigin(0.5);
-    this.lobbyUI.add(title);
-
-    // Back button → Menu
-    const backBtn = this.add
-      .rectangle(50, 20, 80, 30, 0x4a4a4a)
-      .setInteractive();
-    const backLabel = this.add
-      .text(50, 20, "BACK", {
-        fontSize: "12px",
-        fontFamily: "Arial",
-        color: "#ffffff",
-      })
-      .setOrigin(0.5);
-    backBtn.on("pointerdown", () => this.scene.start("MenuScene"));
-    this.lobbyUI.add([backBtn, backLabel]);
-
-    // Loading indicator
-    const loadingText = this.add
-      .text(width / 2, height / 2, "Đang tải...", {
-        fontSize: "16px",
-        fontFamily: "Arial",
-        color: "#888888",
-      })
-      .setOrigin(0.5);
-    this.lobbyUI.add(loadingText);
-
-    this.state = "lobby";
-    this.lobbyLoaded = true;
-
-    const character = await CharacterService.getDetail();
-    loadingText.destroy();
-
-    if (character) {
-      this.renderLobbyCharacter(character);
-    } else {
-      this.showCreatePopup();
-    }
-  }
-
-  private renderLobbyCharacter(character: CharacterDetail) {
-    const width = this.cameras.main.width;
-    const height = this.cameras.main.height;
-    const cx = width / 2;
-    const cy = height / 2;
-
-    // Preview nhân vật dùng Player class
-    const preview = new Player(this, cx, cy, "preview", character.name);
-    // Tắt physics cho preview
-    (preview.body as Phaser.Physics.Arcade.Body).setEnable(false);
-    this.lobbyUI.add(preview);
-
-    // Start Game button
-    const startBtn = this.add
-      .rectangle(cx, height - 50, 160, 44, 0x06a77d)
-      .setInteractive();
-    const startLabel = this.add
-      .text(cx, height - 50, "START GAME", {
-        fontSize: "16px",
-        fontFamily: "Arial",
-        color: "#ffffff",
-        fontStyle: "bold",
-      })
-      .setOrigin(0.5);
-
-    startBtn.on("pointerover", () => startBtn.setFillStyle(0x059669));
-    startBtn.on("pointerout", () => startBtn.setFillStyle(0x06a77d));
-    startBtn.on("pointerdown", () => this.startPlaying(character));
-
-    this.lobbyUI.add([startBtn, startLabel]);
-  }
-
-  private showCreatePopup() {
-    const width = this.cameras.main.width;
-    const height = this.cameras.main.height;
-    const cx = width / 2;
-    const cy = height / 2;
-
-    this.add.rectangle(cx, cy, width, height, 0x000000, 0.6);
-
-    this.createPopup = this.add.container(cx, cy);
-
-    const panelW = 340;
-    const panelH = 220;
-
-    const bg = this.add.rectangle(0, 0, panelW, panelH, 0x2d2d2d);
-    bg.setStrokeStyle(2, 0x06a77d);
-
-    const title = this.add
-      .text(0, -panelH / 2 + 28, "TẠO NHÂN VẬT", {
-        fontSize: "20px",
-        fontFamily: "Arial",
-        color: "#06a77d",
-        fontStyle: "bold",
-      })
-      .setOrigin(0.5);
-
-    this.characterNameInput = this.createInputField(0, -20);
-
-    this.popupErrorText = this.add
-      .text(0, 32, "", {
-        fontSize: "13px",
-        fontFamily: "Arial",
-        color: "#e74c3c",
-        align: "center",
-        wordWrap: { width: panelW - 40 },
-      })
-      .setOrigin(0.5);
-
-    const createBtn = this.add
-      .rectangle(0, 76, 160, 40, 0x06a77d)
-      .setInteractive();
-    const createBtnText = this.add
-      .text(0, 76, "TẠO", {
-        fontSize: "15px",
-        fontFamily: "Arial",
-        color: "#ffffff",
-        fontStyle: "bold",
-      })
-      .setOrigin(0.5);
-
-    createBtn.on("pointerover", () => createBtn.setFillStyle(0x059669));
-    createBtn.on("pointerout", () => createBtn.setFillStyle(0x06a77d));
-    createBtn.on("pointerdown", () => this.handleCreateCharacter());
-
-    this.createPopup.add([
-      bg,
-      title,
-      this.characterNameInput.container,
-      this.popupErrorText,
-      createBtn,
-      createBtnText,
-    ]);
-
-    this.input.keyboard?.on("keydown", (event: KeyboardEvent) => {
-      if (this.state !== "lobby") return;
-      const key = event.key;
-      if (key === "Backspace") {
-        this.characterNameInput.value = this.characterNameInput.value.slice(
-          0,
-          -1,
-        );
-        this.updateInputDisplay();
-      } else if (key === "Enter") {
-        this.handleCreateCharacter();
-      } else if (key.length === 1) {
-        this.characterNameInput.value += key;
-        this.updateInputDisplay();
-      }
-    });
-  }
-
-  private createInputField(x: number, y: number): InputField {
-    const placeholder = "Nhập tên nhân vật...";
-    const container = this.add.container(x, y);
-    const bg = this.add.rectangle(0, 0, 260, 40, 0x1a1a1a);
-    bg.setStrokeStyle(2, 0x444444);
-    const inputText = this.add
-      .text(-120, -8, placeholder, {
-        fontSize: "14px",
-        fontFamily: "Arial",
-        color: "#888888",
-      })
-      .setOrigin(0, 0);
-    container.add([bg, inputText]);
-    bg.setInteractive();
-    bg.on("pointerdown", () => {
-      bg.setStrokeStyle(2, 0x06a77d);
-      inputText.setColor("#ffffff");
-    });
-    return { container, input: inputText, value: "", placeholder };
-  }
-
-  private updateInputDisplay() {
-    const field = this.characterNameInput;
-    if (field.value === "") {
-      field.input.setText(field.placeholder);
-      field.input.setColor("#888888");
-    } else {
-      field.input.setText(field.value);
-      field.input.setColor("#ffffff");
-    }
-  }
-
-  private async handleCreateCharacter() {
-    if (this.isCreating) return;
-    const name = this.characterNameInput.value.trim();
-    if (!name) {
-      this.popupErrorText.setText("Tên nhân vật không được để trống");
-      return;
-    }
-    if (name.length < 2) {
-      this.popupErrorText.setText("Tên nhân vật phải ít nhất 2 ký tự");
-      return;
-    }
-    this.isCreating = true;
-    this.popupErrorText.setColor("#06a77d");
-    this.popupErrorText.setText("Đang tạo nhân vật...");
-    try {
-      const ok = await CharacterService.create(name);
-      if (!ok) {
-        this.popupErrorText.setColor("#e74c3c");
-        this.popupErrorText.setText("Tạo nhân vật thất bại, thử lại");
-        return;
-      }
-      const character = await CharacterService.getDetail();
-      if (character) {
-        this.createPopup.destroy();
-        this.renderLobbyCharacter(character);
-      }
-    } catch (err: any) {
-      this.popupErrorText.setColor("#e74c3c");
-      this.popupErrorText.setText("Lỗi: " + err.message);
-    } finally {
-      this.isCreating = false;
-    }
+    this.startPlaying(this.character);
   }
 
   // ─── PLAYING ──────────────────────────────────────────────────────────────
 
   private startPlaying(character: CharacterDetail) {
     Logger.info("Starting game for character:", character.name);
-    this.state = "playing";
-    this.currentCharacter = character;
-
-    // Destroy all lobby UI
-    this.lobbyUI.destroy(true);
 
     // Create tilemap
     this.tileMap = TileMapService.generateMap();
@@ -390,23 +124,33 @@ export class GameScene extends Phaser.Scene {
       left: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.A),
       right: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D),
     };
-
     this.setupSocket();
+
+    // Equipment HUD
+    this.equipmentHUD = new EquipmentHUD(this);
+    this.equipmentHUD.onEquip = (item) => {
+      if (item.slot === "body") this.player.equipBody(item.spriteKey, item.animPrefix, item.assetFolder);
+      if (item.slot === "legs") this.player.equipLegs(item.spriteKey, item.animPrefix, item.assetFolder);
+    };
+    this.equipmentHUD.onUnequip = (slot) => {
+      if (slot === "body") this.player.equipBody(null, null);
+      if (slot === "legs") this.player.equipLegs(null, null);
+    };
+
+    // Hotbar number keys 1-7 (highlight + equip item in that slot)
+    const hotbarKeys = ["ONE","TWO","THREE","FOUR","FIVE","SIX","SEVEN"] as const;
+    hotbarKeys.forEach((name, i) => {
+      this.input.keyboard!.on(`keydown-${name}`, () => {
+        this.equipmentHUD.setActiveHotbar(i as HotbarSlot);
+      });
+    });
   }
 
   private setupSocket() {
     this.cleanupSocket();
     this.socketManager = new SocketManager();
-
-    this.socketManager.on(SOCKET_EVENTS.CONNECT, () => {
-      this.emitPlayerPosition("idle-right", true);
-    });
-
+    this.socketManager.on(SOCKET_EVENTS.CONNECT, () => this.emitPlayerPosition("idle-right", true));
     this.socketManager.on(SOCKET_EVENTS.PLAYER_MOVE, this.handleRemoteMove);
-
-    if (this.socketManager.isConnected()) {
-      this.emitPlayerPosition("idle-right", true);
-    }
   }
 
   private cleanupSocket() {
@@ -415,33 +159,23 @@ export class GameScene extends Phaser.Scene {
       this.socketManager.disconnect();
       this.socketManager = null;
     }
-
     this.remotePlayers.forEach((player) => player.destroy());
     this.remotePlayers.clear();
   }
 
   private emitPlayerPosition(animation: string, force = false) {
-    if (!this.socketManager || !this.currentCharacter || !this.player) return;
-
+    if (!this.socketManager || !this.character || !this.player) return;
     const now = this.time.now;
     const dx = Math.abs(this.player.x - this.lastSyncedPosition.x);
     const dy = Math.abs(this.player.y - this.lastSyncedPosition.y);
-    const positionChanged = dx > POSITION_EPSILON || dy > POSITION_EPSILON;
-
-    if (
-      !force &&
-      (!positionChanged || now - this.lastMovementSync < MOVEMENT_SYNC_INTERVAL)
-    ) {
-      return;
-    }
-
+    const changed = dx > POSITION_EPSILON || dy > POSITION_EPSILON;
+    if (!force && (!changed || now - this.lastMovementSync < MOVEMENT_SYNC_INTERVAL)) return;
     this.lastMovementSync = now;
     this.lastSyncedPosition = { x: this.player.x, y: this.player.y };
-
     this.socketManager.emit(SOCKET_EVENTS.PLAYER_MOVE, {
-      playerId: this.currentCharacter.id,
-      id: this.currentCharacter.id,
-      name: this.currentCharacter.name,
+      playerId: this.character.id,
+      id: this.character.id,
+      name: this.character.name,
       x: this.player.x,
       y: this.player.y,
       animation,
@@ -449,53 +183,28 @@ export class GameScene extends Phaser.Scene {
   }
 
   private handleRemoteMove = (data: {
-    playerId?: string;
-    id?: string;
-    name?: string;
-    x: number;
-    y: number;
-    animation?: string;
+    playerId?: string; id?: string; name?: string; x: number; y: number; animation?: string;
   }) => {
     const playerId = data.playerId ?? data.id;
-    if (!playerId || playerId === this.currentCharacter?.id) return;
-
+    if (!playerId || playerId === this.character?.id) return;
     this.upsertRemotePlayer({
-      id: playerId,
-      name: data.name ?? `Player ${playerId.slice(0, 4)}`,
-      x: data.x,
-      y: data.y,
-      level: 1,
-      hp: 100,
-      maxHp: 100,
-      equipment: {},
-      animation: data.animation,
+      id: playerId, name: data.name ?? `Player ${playerId.slice(0, 4)}`,
+      x: data.x, y: data.y, level: 1, hp: 100, maxHp: 100,
+      equipment: {}, animation: data.animation,
     });
   };
 
-  private upsertRemotePlayer(playerData: PlayerData) {
-    if (!this.player || playerData.id === this.currentCharacter?.id) return;
-
-    let remotePlayer = this.remotePlayers.get(playerData.id);
+  private upsertRemotePlayer(data: PlayerData) {
+    let remotePlayer = this.remotePlayers.get(data.id);
     if (!remotePlayer) {
-      remotePlayer = new Player(
-        this,
-        playerData.x,
-        playerData.y,
-        playerData.id,
-        playerData.name,
-      );
-      this.remotePlayers.set(playerData.id, remotePlayer);
+      remotePlayer = new Player(this, data.x, data.y, data.id, data.name);
+      this.remotePlayers.set(data.id, remotePlayer);
     }
-
-    remotePlayer.setPosition(playerData.x, playerData.y);
-    const body = remotePlayer.body as Phaser.Physics.Arcade.Body;
-    body.setVelocity(0, 0);
-
-    if (playerData.animation?.includes("left")) {
-      remotePlayer.faceLeft();
-    } else if (playerData.animation?.includes("right")) {
-      remotePlayer.faceRight();
-    }
+    remotePlayer.setPosition(data.x, data.y);
+    (remotePlayer.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
+    remotePlayer.setMoving(data.animation?.startsWith("walk") ?? false);
+    if (data.animation?.includes("left")) remotePlayer.faceLeft();
+    else if (data.animation?.includes("right")) remotePlayer.faceRight();
   }
 
   // ─── AUTO FARM ────────────────────────────────────────────────────────────
@@ -519,25 +228,15 @@ export class GameScene extends Phaser.Scene {
       this.lastFarmedTile.y !== tile.y ||
       this.farmCooldown <= 0
     ) {
-      const harvestResult = TileMapService.harvestTile(
-        this.tileMap,
-        tile.x,
-        tile.y,
-        10,
-      );
-
-      if (!harvestResult) return;
+      // Damage the tile
+      TileMapService.damageTile(this.tileMap, tile.x, tile.y, 10);
 
       Logger.info(
         `Farmed tile at (${tile.x}, ${tile.y}) - Health: ${tile.health}/${tile.maxHealth}`,
       );
 
-      if (harvestResult.reward) {
-        Logger.info("Tile reward received:", harvestResult.reward);
-      }
-
       // Update UI
-      this.totalResourcesMined += harvestResult.reward?.amount ?? 1;
+      this.totalResourcesMined += 1;
       this.resourcesUI.setText(`Resources Farmed: ${this.totalResourcesMined}`);
 
       // Update visual
@@ -552,7 +251,7 @@ export class GameScene extends Phaser.Scene {
   // ─── UPDATE ───────────────────────────────────────────────────────────────
 
   update() {
-    if (this.state !== "playing" || !this.player) return;
+    if (!this.player) return;
 
     // Auto farm current tile
     this.autoFarmCurrentTile();
@@ -598,7 +297,14 @@ export class GameScene extends Phaser.Scene {
     if (up) body.setVelocityY(-SPEED);
     if (down) body.setVelocityY(SPEED);
 
-    const animation = left ? "walk-left" : right ? "walk-right" : "idle-right";
+    this.player.setMoving(left || right || up || down);
+    const animation = left
+      ? "walk-left"
+      : right
+        ? "walk-right"
+        : up || down
+          ? "walk-right"
+          : "idle-right";
     this.emitPlayerPosition(animation);
   }
 }
