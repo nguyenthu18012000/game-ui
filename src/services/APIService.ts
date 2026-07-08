@@ -1,5 +1,6 @@
 import { Logger } from "../utils/logger";
 import { APIInterceptor } from "./APIInterceptor";
+import { API_BASE_URL } from "../constants/ApiConstants";
 
 export interface APIResponse<T = any> {
   success: boolean;
@@ -14,12 +15,17 @@ export interface APIError {
   data?: any;
 }
 
+const buildApiUrl = (baseURL: string, endpoint: string) => {
+  const normalizedEndpoint = endpoint.replace(/^\/+/, "");
+  return `${baseURL}/${normalizedEndpoint}`;
+};
+
 export class APIService {
   private static instance: APIService;
   private baseURL: string;
   private timeout: number = 10000; // 10 seconds
 
-  private constructor(baseURL: string = "http://localhost:8080") {
+  private constructor(baseURL: string = API_BASE_URL) {
     this.baseURL = baseURL;
     Logger.info("APIService initialized");
   }
@@ -85,7 +91,7 @@ export class APIService {
     body?: any,
     options?: RequestInit,
   ): Promise<APIResponse<T>> {
-    const url = `${this.baseURL}${endpoint}`;
+    const url = buildApiUrl(this.baseURL, endpoint);
     const headers: any = {
       "Content-Type": "application/json",
       ...(options?.headers || {}),

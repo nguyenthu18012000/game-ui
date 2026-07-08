@@ -5,11 +5,16 @@ import {
   CharacterService,
   type CharacterDetail,
 } from "../services/CharacterService";
+import { SocketManager } from "../network/SocketManager";
 import { TileMapService } from "../services/TileMapService";
 import { TileMapRenderer } from "../services/TileMapRenderer";
+import { SOCKET_EVENTS } from "../constants/SocketEvents";
 import type { TileMap } from "../types/Tile";
+import type { PlayerData } from "../types/Player";
 
 const SPEED = 160;
+const MOVEMENT_SYNC_INTERVAL = 50;
+const POSITION_EPSILON = 1;
 
 interface InputField {
   container: Phaser.GameObjects.Container;
@@ -32,6 +37,11 @@ export class GameScene extends Phaser.Scene {
 
   // Gameplay
   private player!: Player;
+  private currentCharacter: CharacterDetail | null = null;
+  private socketManager: SocketManager | null = null;
+  private remotePlayers = new Map<string, Player>();
+  private lastMovementSync = 0;
+  private lastSyncedPosition = { x: Number.NaN, y: Number.NaN };
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private wasd!: {
     up: Phaser.Input.Keyboard.Key;
@@ -57,6 +67,8 @@ export class GameScene extends Phaser.Scene {
   create() {
     Logger.info("GameScene created");
     this.state = "loading";
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.cleanupSocket());
+    this.events.once(Phaser.Scenes.Events.DESTROY, () => this.cleanupSocket());
 
     // Only load lobby if not already loaded (prevent double-load on reload)
     if (!this.lobbyLoaded) {
@@ -314,6 +326,7 @@ export class GameScene extends Phaser.Scene {
   private startPlaying(character: CharacterDetail) {
     Logger.info("Starting game for character:", character.name);
     this.state = "playing";
+    this.currentCharacter = character;
 
     // Destroy all lobby UI
     this.lobbyUI.destroy(true);
@@ -327,7 +340,7 @@ export class GameScene extends Phaser.Scene {
     this.physics.world.setBounds(0, 0, 24000, 24000);
 
     // Player với tên từ character - spawn ở giữa bản đồ
-    this.player = new Player(this, 12000, 12000, "local", character.name);
+    this.player = new Player(this, 12000, 12000, character.id, character.name);
 
     // Setup camera
     const camera = this.cameras.main;
@@ -377,6 +390,112 @@ export class GameScene extends Phaser.Scene {
       left: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.A),
       right: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D),
     };
+
+    this.setupSocket();
+  }
+
+  private setupSocket() {
+    this.cleanupSocket();
+    this.socketManager = new SocketManager();
+
+    this.socketManager.on(SOCKET_EVENTS.CONNECT, () => {
+      this.emitPlayerPosition("idle-right", true);
+    });
+
+    this.socketManager.on(SOCKET_EVENTS.PLAYER_MOVE, this.handleRemoteMove);
+
+    if (this.socketManager.isConnected()) {
+      this.emitPlayerPosition("idle-right", true);
+    }
+  }
+
+  private cleanupSocket() {
+    if (this.socketManager) {
+      this.socketManager.off(SOCKET_EVENTS.PLAYER_MOVE, this.handleRemoteMove);
+      this.socketManager.disconnect();
+      this.socketManager = null;
+    }
+
+    this.remotePlayers.forEach((player) => player.destroy());
+    this.remotePlayers.clear();
+  }
+
+  private emitPlayerPosition(animation: string, force = false) {
+    if (!this.socketManager || !this.currentCharacter || !this.player) return;
+
+    const now = this.time.now;
+    const dx = Math.abs(this.player.x - this.lastSyncedPosition.x);
+    const dy = Math.abs(this.player.y - this.lastSyncedPosition.y);
+    const positionChanged = dx > POSITION_EPSILON || dy > POSITION_EPSILON;
+
+    if (
+      !force &&
+      (!positionChanged || now - this.lastMovementSync < MOVEMENT_SYNC_INTERVAL)
+    ) {
+      return;
+    }
+
+    this.lastMovementSync = now;
+    this.lastSyncedPosition = { x: this.player.x, y: this.player.y };
+
+    this.socketManager.emit(SOCKET_EVENTS.PLAYER_MOVE, {
+      playerId: this.currentCharacter.id,
+      id: this.currentCharacter.id,
+      name: this.currentCharacter.name,
+      x: this.player.x,
+      y: this.player.y,
+      animation,
+    });
+  }
+
+  private handleRemoteMove = (data: {
+    playerId?: string;
+    id?: string;
+    name?: string;
+    x: number;
+    y: number;
+    animation?: string;
+  }) => {
+    const playerId = data.playerId ?? data.id;
+    if (!playerId || playerId === this.currentCharacter?.id) return;
+
+    this.upsertRemotePlayer({
+      id: playerId,
+      name: data.name ?? `Player ${playerId.slice(0, 4)}`,
+      x: data.x,
+      y: data.y,
+      level: 1,
+      hp: 100,
+      maxHp: 100,
+      equipment: {},
+      animation: data.animation,
+    });
+  };
+
+  private upsertRemotePlayer(playerData: PlayerData) {
+    if (!this.player || playerData.id === this.currentCharacter?.id) return;
+
+    let remotePlayer = this.remotePlayers.get(playerData.id);
+    if (!remotePlayer) {
+      remotePlayer = new Player(
+        this,
+        playerData.x,
+        playerData.y,
+        playerData.id,
+        playerData.name,
+      );
+      this.remotePlayers.set(playerData.id, remotePlayer);
+    }
+
+    remotePlayer.setPosition(playerData.x, playerData.y);
+    const body = remotePlayer.body as Phaser.Physics.Arcade.Body;
+    body.setVelocity(0, 0);
+
+    if (playerData.animation?.includes("left")) {
+      remotePlayer.faceLeft();
+    } else if (playerData.animation?.includes("right")) {
+      remotePlayer.faceRight();
+    }
   }
 
   // ─── AUTO FARM ────────────────────────────────────────────────────────────
@@ -400,15 +519,25 @@ export class GameScene extends Phaser.Scene {
       this.lastFarmedTile.y !== tile.y ||
       this.farmCooldown <= 0
     ) {
-      // Damage the tile
-      TileMapService.damageTile(this.tileMap, tile.x, tile.y, 10);
+      const harvestResult = TileMapService.harvestTile(
+        this.tileMap,
+        tile.x,
+        tile.y,
+        10,
+      );
+
+      if (!harvestResult) return;
 
       Logger.info(
         `Farmed tile at (${tile.x}, ${tile.y}) - Health: ${tile.health}/${tile.maxHealth}`,
       );
 
+      if (harvestResult.reward) {
+        Logger.info("Tile reward received:", harvestResult.reward);
+      }
+
       // Update UI
-      this.totalResourcesMined += 1;
+      this.totalResourcesMined += harvestResult.reward?.amount ?? 1;
       this.resourcesUI.setText(`Resources Farmed: ${this.totalResourcesMined}`);
 
       // Update visual
@@ -468,5 +597,8 @@ export class GameScene extends Phaser.Scene {
     }
     if (up) body.setVelocityY(-SPEED);
     if (down) body.setVelocityY(SPEED);
+
+    const animation = left ? "walk-left" : right ? "walk-right" : "idle-right";
+    this.emitPlayerPosition(animation);
   }
 }

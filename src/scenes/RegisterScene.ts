@@ -1,21 +1,15 @@
 import * as Phaser from "phaser";
 import { Logger } from "../utils/logger";
 import { AuthService } from "../services/AuthService";
-
-interface InputField {
-  container: Phaser.GameObjects.Container;
-  input: Phaser.GameObjects.Text;
-  label: Phaser.GameObjects.Text;
-  value: string;
-  placeholder: string;
-}
+import { TextInput } from "../ui/TextInput";
 
 export class RegisterScene extends Phaser.Scene {
-  private usernameInput!: InputField;
-  private passwordInput!: InputField;
-  private confirmPasswordInput!: InputField;
+  private usernameInput!: TextInput;
+  private passwordInput!: TextInput;
+  private confirmPasswordInput!: TextInput;
   private errorText!: Phaser.GameObjects.Text;
   private isLoading = false;
+  private focusedInput: TextInput | null = null;
 
   constructor() {
     super({ key: "RegisterScene" });
@@ -27,10 +21,8 @@ export class RegisterScene extends Phaser.Scene {
     const width = this.cameras.main.width;
     const height = this.cameras.main.height;
 
-    // Background
     this.add.rectangle(width / 2, height / 2, width, height, 0x1a1a1a);
 
-    // Title
     this.add
       .text(width / 2, 40, "CREATE ACCOUNT", {
         fontSize: "32px",
@@ -40,31 +32,28 @@ export class RegisterScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    // Username Input
-    this.usernameInput = this.createInputField(
+    this.usernameInput = this.createInput(
       "Username",
       width / 2,
       100,
       "Your name here",
     );
-
-    // Password Input
-    this.passwordInput = this.createInputField(
+    this.setFocusedInput(this.usernameInput);
+    this.passwordInput = this.createInput(
       "Password",
       width / 2,
       160,
-      "••••••••",
+      "********",
+      true,
     );
-
-    // Confirm Password Input
-    this.confirmPasswordInput = this.createInputField(
+    this.confirmPasswordInput = this.createInput(
       "Confirm Password",
       width / 2,
       220,
-      "••••••••",
+      "********",
+      true,
     );
 
-    // Error/Info message
     this.errorText = this.add
       .text(width / 2, 290, "", {
         fontSize: "12px",
@@ -75,7 +64,6 @@ export class RegisterScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    // Register Button
     const registerBtn = this.add
       .rectangle(width / 2, 340, 200, 50, 0x06a77d)
       .setInteractive();
@@ -91,7 +79,6 @@ export class RegisterScene extends Phaser.Scene {
 
     registerBtn.on("pointerdown", () => this.handleRegister());
 
-    // Back to Login
     const backText = this.add
       .text(width / 2, 410, "Already have account? LOGIN", {
         fontSize: "14px",
@@ -106,76 +93,86 @@ export class RegisterScene extends Phaser.Scene {
       Logger.info("Going back to LoginScene");
       this.scene.start("LoginScene");
     });
+
+    this.setupKeyboard();
   }
 
-  private createInputField(
+  private createInput(
     label: string,
     x: number,
     y: number,
     placeholder: string,
-  ): InputField {
-    const container = this.add.container(x, y);
-
-    // Background
-    const bg = this.add.rectangle(0, 0, 300, 35, 0x2d2d2d);
-    bg.setStrokeStyle(2, 0x06a77d);
-
-    // Label
-    const labelText = this.add.text(-140, -17, label, {
-      fontSize: "11px",
-      fontFamily: "Arial",
-      color: "#888888",
-    });
-
-    // Input text
-    const inputText = this.add.text(-130, -5, placeholder, {
-      fontSize: "12px",
-      fontFamily: "Arial",
-      color: "#888888",
-    });
-
-    container.add([bg, labelText, inputText]);
-
-    // Make background interactive
-    bg.setInteractive();
-    bg.on("pointerdown", () => {
-      inputText.setColor("#ffffff");
-    });
-
-    return {
-      container,
-      input: inputText,
-      label: labelText,
-      value: "",
+    password = false,
+  ) {
+    return new TextInput(this, {
+      label,
+      x,
+      y,
       placeholder,
-    };
+      password,
+      height: 35,
+      labelFontSize: "11px",
+      inputFontSize: "12px",
+      onFocus: (input) => this.setFocusedInput(input),
+    });
+  }
+
+  private setupKeyboard() {
+    this.input.keyboard?.on("keydown", (event: KeyboardEvent) => {
+      const key = event.key;
+
+      if (key === "Enter") {
+        this.handleRegister();
+        return;
+      }
+
+      this.focusedInput?.handleKey(key);
+    });
+  }
+
+  private setFocusedInput(input: TextInput) {
+    this.focusedInput?.blur();
+    this.focusedInput = input;
+    this.focusedInput.focus();
   }
 
   private async handleRegister() {
     if (this.isLoading) return;
 
-    const username = this.usernameInput.value.trim();
-    const password = this.passwordInput.value.trim();
-    const confirmPassword = this.confirmPasswordInput.value.trim();
+    this.clearFieldMessages();
+    this.errorText.setText("");
 
-    // Validate
-    if (!username || !password || !confirmPassword) {
-      this.showError("Tất cả các trường không được để trống");
-      return;
+    const username = this.usernameInput.getValue().trim();
+    const password = this.passwordInput.getValue().trim();
+    const confirmPassword = this.confirmPasswordInput.getValue().trim();
+    let firstInvalidInput: TextInput | null = null;
+
+    if (!username) {
+      this.usernameInput.setError("Username không được để trống");
+      firstInvalidInput = this.usernameInput;
+    } else if (username.length < 3) {
+      this.usernameInput.setError("Username phải ít nhất 3 ký tự");
+      firstInvalidInput = this.usernameInput;
     }
 
-    if (username.length < 3) {
-      this.showError("Username phải ít nhất 3 ký tự");
-      return;
+    if (!password) {
+      this.passwordInput.setError("Password không được để trống");
+      firstInvalidInput ??= this.passwordInput;
+    } else if (password.length < 6) {
+      this.passwordInput.setError("Password phải ít nhất 6 ký tự");
+      firstInvalidInput ??= this.passwordInput;
     }
 
-    if (password.length < 6) {
-      this.showError("Password phải ít nhất 6 ký tự");
-      return;
+    if (!confirmPassword) {
+      this.confirmPasswordInput.setError("Confirm password không được để trống");
+      firstInvalidInput ??= this.confirmPasswordInput;
+    } else if (password && password !== confirmPassword) {
+      this.confirmPasswordInput.setError("Password không khớp");
+      firstInvalidInput ??= this.confirmPasswordInput;
     }
 
-    if (password !== confirmPassword) {
-      this.showError("Password không khớp");
+    if (firstInvalidInput) {
+      this.setFocusedInput(firstInvalidInput);
       return;
     }
 
@@ -188,14 +185,11 @@ export class RegisterScene extends Phaser.Scene {
 
       if (result.success) {
         Logger.info("Registration successful:", result.data);
-
-        // Hiển thị thông báo
         this.errorText.setText("Tài khoản tạo thành công! Chuyển sang game...");
         this.errorText.setColor("#2ecc71");
 
-        // Chuyển sang LobbyScene sau 2 giây
         this.time.delayedCall(2000, () => {
-          this.scene.start("LobbyScene");
+          this.scene.start("GameScene");
         });
       } else {
         this.showError(result.error || "Tạo account thất bại");
@@ -211,9 +205,14 @@ export class RegisterScene extends Phaser.Scene {
     this.errorText.setText(message);
     this.errorText.setColor("#e74c3c");
 
-    // Tự động xóa thông báo lỗi sau 5 giây
     this.time.delayedCall(5000, () => {
       this.errorText.setText("");
     });
+  }
+
+  private clearFieldMessages() {
+    this.usernameInput.clearMessage();
+    this.passwordInput.clearMessage();
+    this.confirmPasswordInput.clearMessage();
   }
 }

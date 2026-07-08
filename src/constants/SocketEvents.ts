@@ -3,6 +3,7 @@ export const SOCKET_EVENTS = {
   CONNECT: "connect",
   DISCONNECT: "disconnect",
   ERROR: "error",
+  MESSAGE: "message",
 
   // Player Events
   PLAYER_JOIN: "player-join",
@@ -11,7 +12,7 @@ export const SOCKET_EVENTS = {
   PLAYER_UPDATE: "player-update",
 
   // Movement Events
-  PLAYER_MOVE: "player-move",
+  PLAYER_MOVE: "MOVE",
   PLAYER_POSITION: "player-position",
 
   // Equipment Events
