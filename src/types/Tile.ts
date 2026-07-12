@@ -48,6 +48,17 @@ export interface Tile {
   depletedAt?: number; // Timestamp when the tile was depleted
 }
 
+export interface TileReward {
+  resourceType: TileType;
+  amount: number;
+}
+
+export interface HarvestResult {
+  depleted: boolean;
+  reward: TileReward | null;
+  tile: Tile;
+}
+
 /**
  * Represents the entire tile map
  */

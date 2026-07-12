@@ -1,7 +1,8 @@
 import { Logger } from "../utils/logger";
 import { TokenService } from "./TokenService";
+import { API_BASE_URL, API_ENDPOINTS } from "../constants/ApiConstants";
 
-const AUTH_API_URL = "http://localhost:8080/auth";
+const getApiUrl = (endpoint: string) => `${API_BASE_URL}/${endpoint}`;
 
 /**
  * AuthService - Quản lý authentication
@@ -12,7 +13,7 @@ export class AuthService {
    */
   static async login(username: string, password: string) {
     try {
-      const response = await fetch(`${AUTH_API_URL}/login`, {
+      const response = await fetch(getApiUrl(API_ENDPOINTS.AUTH.LOGIN), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -56,7 +57,7 @@ export class AuthService {
    */
   static async register(username: string, password: string) {
     try {
-      const response = await fetch(`${AUTH_API_URL}/register`, {
+      const response = await fetch(getApiUrl(API_ENDPOINTS.AUTH.REGISTER), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -105,7 +106,7 @@ export class AuthService {
         throw new Error("No refresh token");
       }
 
-      const response = await fetch(`${AUTH_API_URL}/refresh`, {
+      const response = await fetch(getApiUrl(API_ENDPOINTS.AUTH.REFRESH), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

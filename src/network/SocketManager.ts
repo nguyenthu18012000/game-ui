@@ -1,11 +1,19 @@
-import { io, Socket } from "socket.io-client";
-import { SOCKET_SERVER_URL } from "../constants/GameConfig";
 import { SOCKET_EVENTS } from "../constants/SocketEvents";
+import { WEBSOCKET_SERVER_URL } from "../constants/GameConfig";
 import { Logger } from "../utils/logger";
 
+type SocketCallback = (...args: any[]) => void;
+
+interface SocketMessage<T = any> {
+  event?: string;
+  payload?: T;
+}
+
 export class SocketManager {
-  private socket: Socket | null = null;
+  private socket: WebSocket | null = null;
   private connected = false;
+  private listeners = new Map<string, Set<SocketCallback>>();
+  private pendingMessages: string[] = [];
 
   constructor() {
     this.init();
@@ -13,36 +21,82 @@ export class SocketManager {
 
   private init() {
     try {
-      this.socket = io(SOCKET_SERVER_URL, {
-        reconnection: true,
-        reconnectionDelay: 1000,
-        reconnectionDelayMax: 5000,
-        reconnectionAttempts: 5,
-      });
-
+      this.socket = new WebSocket(WEBSOCKET_SERVER_URL);
       this.setupListeners();
-      Logger.info("Socket initialized");
+      Logger.info("WebSocket initialized");
     } catch (error) {
-      Logger.error("Failed to initialize socket", error);
+      Logger.error("Failed to initialize WebSocket", error);
     }
   }
 
   private setupListeners() {
     if (!this.socket) return;
 
-    this.socket.on(SOCKET_EVENTS.CONNECT, () => {
+    this.socket.onopen = () => {
       this.connected = true;
-      Logger.info("Socket connected");
-    });
+      Logger.info("WebSocket connected");
+      this.dispatch(SOCKET_EVENTS.CONNECT);
+      this.flushPendingMessages();
+    };
 
-    this.socket.on(SOCKET_EVENTS.DISCONNECT, () => {
+    this.socket.onclose = () => {
       this.connected = false;
-      Logger.warn("Socket disconnected");
-    });
+      Logger.warn("WebSocket disconnected");
+      this.dispatch(SOCKET_EVENTS.DISCONNECT);
+    };
 
-    this.socket.on(SOCKET_EVENTS.ERROR, (error: any) => {
-      Logger.error("Socket error", error);
-    });
+    this.socket.onerror = (error) => {
+      Logger.error("WebSocket error", error);
+      this.dispatch(SOCKET_EVENTS.ERROR, error);
+    };
+
+    this.socket.onmessage = (message) => {
+      this.handleMessage(message.data);
+    };
+  }
+
+  private handleMessage(data: string) {
+    try {
+      const message = JSON.parse(data) as SocketMessage;
+
+      if (message.event && "payload" in message) {
+        this.dispatch(message.event, message.payload);
+        return;
+      }
+
+      if (this.isMovePayload(message)) {
+        this.dispatch(SOCKET_EVENTS.PLAYER_MOVE, message);
+        return;
+      }
+
+      this.dispatch(SOCKET_EVENTS.MESSAGE, message);
+    } catch (error) {
+      Logger.error("Failed to parse WebSocket message", error);
+    }
+  }
+
+  private isMovePayload(message: SocketMessage) {
+    return (
+      typeof message === "object" &&
+      message !== null &&
+      ("playerId" in message || "id" in message) &&
+      "x" in message &&
+      "y" in message
+    );
+  }
+
+  private dispatch(event: string, ...args: any[]) {
+    const callbacks = this.listeners.get(event);
+    if (!callbacks) return;
+
+    callbacks.forEach((callback) => callback(...args));
+  }
+
+  private flushPendingMessages() {
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
+
+    this.pendingMessages.forEach((message) => this.socket?.send(message));
+    this.pendingMessages = [];
   }
 
   isConnected(): boolean {
@@ -50,41 +104,55 @@ export class SocketManager {
   }
 
   emit(event: string, data: any) {
+    const message = JSON.stringify({ event, payload: data });
+
     if (!this.socket) {
-      Logger.warn("Socket not initialized");
+      Logger.warn("WebSocket not initialized");
       return;
     }
-    this.socket.emit(event, data);
+
+    if (this.socket.readyState === WebSocket.OPEN) {
+      this.socket.send(message);
+      return;
+    }
+
+    this.pendingMessages.push(message);
   }
 
-  on(event: string, callback: (...args: any[]) => void) {
-    if (!this.socket) {
-      Logger.warn("Socket not initialized");
-      return;
+  on(event: string, callback: SocketCallback) {
+    if (!this.listeners.has(event)) {
+      this.listeners.set(event, new Set());
     }
-    this.socket.on(event, callback);
+
+    this.listeners.get(event)?.add(callback);
   }
 
-  once(event: string, callback: (...args: any[]) => void) {
-    if (!this.socket) {
-      Logger.warn("Socket not initialized");
-      return;
-    }
-    this.socket.once(event, callback);
+  once(event: string, callback: SocketCallback) {
+    const onceCallback: SocketCallback = (...args) => {
+      this.off(event, onceCallback);
+      callback(...args);
+    };
+
+    this.on(event, onceCallback);
   }
 
-  off(event: string, callback?: (...args: any[]) => void) {
-    if (!this.socket) {
-      Logger.warn("Socket not initialized");
+  off(event: string, callback?: SocketCallback) {
+    if (!callback) {
+      this.listeners.delete(event);
       return;
     }
-    this.socket.off(event, callback);
+
+    this.listeners.get(event)?.delete(callback);
   }
 
   disconnect() {
     if (this.socket) {
-      this.socket.disconnect();
-      Logger.info("Socket disconnected");
+      this.socket.close();
+      this.socket = null;
+      Logger.info("WebSocket disconnected");
     }
+
+    this.connected = false;
+    this.pendingMessages = [];
   }
 }
