@@ -1,13 +1,12 @@
-import * as Phaser from "phaser";
+import type * as Phaser from "phaser";
 import { ANIM_FRAME_COUNT, type PlayerAnimState } from "../entities/Player";
 import type { EquipmentItem } from "../types/Equipment";
 
 // Vite discovers all equipment PNGs at build time but imports them lazily.
 // Adding a new equipment folder = zero code changes needed here.
-const equipmentGlob = import.meta.glob<string>(
-  "../assets/equipment/**/*.png",
-  { import: "default" },
-);
+const equipmentGlob = import.meta.glob<string>("../assets/equipment/**/*.png", {
+  import: "default",
+});
 
 function globPath(folder: string, file: string): string {
   return `../assets/equipment/${folder}/${file}`;
@@ -30,18 +29,15 @@ export class AssetLoader {
    *     remotePlayer.applyAnimState(state);
    *   });
    */
-  static async ensureLoadedForState(
-    scene: Phaser.Scene,
-    state: PlayerAnimState,
-  ): Promise<void> {
+  static async ensureLoadedForState(scene: Phaser.Scene, state: PlayerAnimState): Promise<void> {
     const tasks: Promise<void>[] = [];
 
     if (state.bodyAssetFolder) {
       tasks.push(
         AssetLoader.ensureLoaded(scene, {
-          slot:        "body",
-          spriteKey:   state.bodyIdleKey,
-          animPrefix:  state.bodyAnimPrefix,
+          slot: "body",
+          spriteKey: state.bodyIdleKey,
+          animPrefix: state.bodyAnimPrefix,
           assetFolder: state.bodyAssetFolder,
         } as EquipmentItem),
       );
@@ -50,9 +46,9 @@ export class AssetLoader {
     if (state.legAssetFolder) {
       tasks.push(
         AssetLoader.ensureLoaded(scene, {
-          slot:        "legs",
-          spriteKey:   state.legIdleKey,
-          animPrefix:  state.legAnimPrefix,
+          slot: "legs",
+          spriteKey: state.legIdleKey,
+          animPrefix: state.legAnimPrefix,
           assetFolder: state.legAssetFolder,
         } as EquipmentItem),
       );
@@ -67,14 +63,11 @@ export class AssetLoader {
    * - Safe to call many times — skips textures that already exist.
    * - Returns a Promise so you can await before using the textures.
    */
-  static async ensureLoaded(
-    scene: Phaser.Scene,
-    item: EquipmentItem,
-  ): Promise<void> {
+  static async ensureLoaded(scene: Phaser.Scene, item: EquipmentItem): Promise<void> {
     // Fast path: if the idle sprite texture is present, everything is ready.
     if (scene.textures.exists(item.spriteKey)) return;
 
-    const folder   = item.assetFolder;
+    const folder = item.assetFolder;
     const partName = item.slot === "body" ? "body" : "leg";
 
     const toLoad: { key: string; path: string }[] = [
@@ -83,7 +76,7 @@ export class AssetLoader {
 
     for (let i = 1; i <= ANIM_FRAME_COUNT; i++) {
       toLoad.push({
-        key:  item.animPrefix + i,
+        key: item.animPrefix + i,
         path: globPath(folder, `animation/anim_${partName}_${i}.png`),
       });
     }

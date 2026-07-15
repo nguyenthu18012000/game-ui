@@ -6,20 +6,14 @@ export abstract class MapEntity<TType extends string> {
   }
 }
 
-export abstract class PositionedMapEntity<TType extends string>
-  extends MapEntity<TType> {
+export abstract class PositionedMapEntity<TType extends string> extends MapEntity<TType> {
   readonly x: number;
   readonly y: number;
   readonly pixelX: number;
   readonly pixelY: number;
   readonly tileSize: number;
 
-  protected constructor(
-    type: TType,
-    x: number,
-    y: number,
-    tileSize: number,
-  ) {
+  protected constructor(type: TType, x: number, y: number, tileSize: number) {
     super(type);
     this.x = x;
     this.y = y;
@@ -29,8 +23,7 @@ export abstract class PositionedMapEntity<TType extends string>
   }
 }
 
-export abstract class DamageableMapEntity<TType extends string>
-  extends MapEntity<TType> {
+export abstract class DamageableMapEntity<TType extends string> extends MapEntity<TType> {
   health: number;
   maxHealth: number;
   isDepleted = false;
@@ -60,6 +53,6 @@ export abstract class DamageableMapEntity<TType extends string>
   restore() {
     this.health = this.maxHealth;
     this.isDepleted = false;
-    this.depletedAt = undefined;
+    delete this.depletedAt;
   }
 }

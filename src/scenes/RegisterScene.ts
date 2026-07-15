@@ -93,9 +93,7 @@ export class RegisterScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     // Register Button
-    const registerBtn = this.add
-      .rectangle(width / 2, 460, 200, 50, 0x06a77d)
-      .setInteractive();
+    const registerBtn = this.add.rectangle(width / 2, 460, 200, 50, 0x06a77d).setInteractive();
 
     this.add
       .text(width / 2, 460, "REGISTER", {
@@ -137,7 +135,7 @@ export class RegisterScene extends Phaser.Scene {
   private async handleRegister() {
     if (this.isLoading) return;
 
-    const { username, password } = this.form.getValues();
+    const { username = "", password = "" } = this.form.getValues();
 
     this.isLoading = true;
     this.errorText.setText("Đang tạo account...");
@@ -160,8 +158,9 @@ export class RegisterScene extends Phaser.Scene {
       } else {
         this.showError(result.error || "Tạo account thất bại");
       }
-    } catch (error: any) {
-      this.showError("Lỗi kết nối: " + error.message);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      this.showError("Lỗi kết nối: " + message);
     } finally {
       this.isLoading = false;
     }

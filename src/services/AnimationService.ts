@@ -1,4 +1,4 @@
-import * as Phaser from "phaser";
+import type * as Phaser from "phaser";
 import { ANIMATION_SPEED } from "../constants/GameConstants";
 import { Logger } from "../utils/logger";
 

@@ -1,4 +1,4 @@
-import * as Phaser from "phaser";
+import type * as Phaser from "phaser";
 
 export interface ValidatorRule {
   validate: (value: string) => boolean;
@@ -38,12 +38,7 @@ export class InputField {
 
   private readonly cfg: Required<InputFieldConfig>;
 
-  constructor(
-    scene: Phaser.Scene,
-    x: number,
-    y: number,
-    config: InputFieldConfig = {},
-  ) {
+  constructor(scene: Phaser.Scene, x: number, y: number, config: InputFieldConfig = {}) {
     this.cfg = {
       label: config.label ?? "",
       placeholder: config.placeholder ?? "",
@@ -98,14 +93,11 @@ export class InputField {
     this.bg.setInteractive();
     this.bg.on("pointerdown", () => this._onFocusRequest?.());
     this.bg.on("pointerover", () => {
-      if (!this._focused) this.bg.setStrokeStyle(2, 0x06a77d40 as any);
+      if (!this._focused) this.bg.setStrokeStyle(2, COLORS.borderFocus, 0.25);
     });
     this.bg.on("pointerout", () => {
       if (!this._focused) {
-        this.bg.setStrokeStyle(
-          2,
-          this.errorText.text ? COLORS.borderError : COLORS.borderIdle,
-        );
+        this.bg.setStrokeStyle(2, this.errorText.text ? COLORS.borderError : COLORS.borderIdle);
       }
     });
   }
@@ -130,10 +122,7 @@ export class InputField {
 
   blur(): void {
     this._focused = false;
-    this.bg.setStrokeStyle(
-      2,
-      this.errorText.text ? COLORS.borderError : COLORS.borderIdle,
-    );
+    this.bg.setStrokeStyle(2, this.errorText.text ? COLORS.borderError : COLORS.borderIdle);
   }
 
   appendChar(char: string): void {
@@ -168,10 +157,7 @@ export class InputField {
 
   clearError(): void {
     this.errorText.setText("");
-    this.bg.setStrokeStyle(
-      2,
-      this._focused ? COLORS.borderFocus : COLORS.borderIdle,
-    );
+    this.bg.setStrokeStyle(2, this._focused ? COLORS.borderFocus : COLORS.borderIdle);
   }
 
   private _updateDisplay(): void {
@@ -179,9 +165,7 @@ export class InputField {
       this.inputText.setText(this.cfg.placeholder);
       this.inputText.setColor(COLORS.placeholder);
     } else {
-      const display = this.cfg.isPassword
-        ? "•".repeat(this._value.length)
-        : this._value;
+      const display = this.cfg.isPassword ? "•".repeat(this._value.length) : this._value;
       this.inputText.setText(display);
       this.inputText.setColor(COLORS.text);
     }

@@ -1,4 +1,4 @@
-﻿import * as Phaser from "phaser";
+﻿import type * as Phaser from "phaser";
 import { type EquipmentItem, EQUIPMENT_ITEMS } from "../types/Equipment";
 import { PLAYER_ASSET_KEYS } from "../entities/Player";
 import { AssetLoader } from "../services/AssetLoader";
@@ -14,21 +14,21 @@ interface SlotConfig {
 }
 
 const EQUIP_SLOTS: SlotConfig[] = [
-  { key: "weapon",    label: "VK"   },
-  { key: "head",      label: "Đầu"  },
-  { key: "body",      label: "Áo"   },
-  { key: "legs",      label: "Quần" },
-  { key: "accessory", label: "Phụ kiện"  },
+  { key: "weapon", label: "VK" },
+  { key: "head", label: "Đầu" },
+  { key: "body", label: "Áo" },
+  { key: "legs", label: "Quần" },
+  { key: "accessory", label: "Phụ kiện" },
 ];
 
 const HOTBAR_COUNT = 7;
-const SLOT_SIZE    = 46;
-const SLOT_GAP     = 6;
-const BORDER_COL   = 0x5c3a1e;
-const BG_COL       = 0x2b1a0e;
-const HOVER_COL    = 0x7a5230;
-const PANEL_BG     = 0x3d2710;
-const PANEL_ALPHA  = 0.92;
+const SLOT_SIZE = 46;
+const SLOT_GAP = 6;
+const BORDER_COL = 0x5c3a1e;
+const BG_COL = 0x2b1a0e;
+const HOVER_COL = 0x7a5230;
+const PANEL_BG = 0x3d2710;
+const PANEL_ALPHA = 0.92;
 
 // EquipmentHUD
 export class EquipmentHUD {
@@ -38,15 +38,15 @@ export class EquipmentHUD {
   // Left equip panel
   private equipPanel!: Phaser.GameObjects.Container;
   private equipSlotGraphics: Map<EquipSlot, Phaser.GameObjects.Graphics> = new Map();
-  private equipSlotLabels:   Map<EquipSlot, Phaser.GameObjects.Text>     = new Map();
-  private equipSlotImages:   Map<EquipSlot, Phaser.GameObjects.Image>    = new Map();
-  private equippedItems:     Map<EquipSlot, EquipmentItem>               = new Map();
+  private equipSlotLabels: Map<EquipSlot, Phaser.GameObjects.Text> = new Map();
+  private equipSlotImages: Map<EquipSlot, Phaser.GameObjects.Image> = new Map();
+  private equippedItems: Map<EquipSlot, EquipmentItem> = new Map();
 
   // Hotbar (also serves as inventory)
   private hotbarContainer!: Phaser.GameObjects.Container;
   private hotbarGraphics: Phaser.GameObjects.Graphics[] = [];
-  private hotbarImages:   Phaser.GameObjects.Image[]    = [];
-  private hotbarLabels:   Phaser.GameObjects.Text[]     = [];
+  private hotbarImages: Phaser.GameObjects.Image[] = [];
+  private hotbarLabels: Phaser.GameObjects.Text[] = [];
   private activeHotbar = 0;
 
   // Inventory bag
@@ -134,7 +134,7 @@ export class EquipmentHUD {
       .setInteractive({ useHandCursor: true });
 
     hit.on("pointerover", () => this.drawSlot(g, 0, 0, SLOT_SIZE, true));
-    hit.on("pointerout",  () => this.drawSlot(g, 0, 0, SLOT_SIZE, this.equippedItems.has(cfg.key)));
+    hit.on("pointerout", () => this.drawSlot(g, 0, 0, SLOT_SIZE, this.equippedItems.has(cfg.key)));
     hit.on("pointerdown", () => {
       if (this.equippedItems.has(cfg.key)) this.handleUnequip(cfg.key);
     });
@@ -150,7 +150,10 @@ export class EquipmentHUD {
     this.hotbarImages.forEach((img, i) => {
       const item = this.inventoryItems[i] ?? null;
       if (item) {
-        img.setTexture(item.iconKey).setDisplaySize(SLOT_SIZE - 10, SLOT_SIZE - 10).setVisible(true);
+        img
+          .setTexture(item.iconKey)
+          .setDisplaySize(SLOT_SIZE - 10, SLOT_SIZE - 10)
+          .setVisible(true);
       } else {
         img.setVisible(false);
       }
@@ -160,8 +163,8 @@ export class EquipmentHUD {
   private buildHotbar() {
     const { width, height } = this.scene.cameras.main;
     const totalW = HOTBAR_COUNT * (SLOT_SIZE + SLOT_GAP) - SLOT_GAP + 20;
-    const barX   = Math.round((width - totalW) / 2);
-    const barY   = height - SLOT_SIZE - 14;
+    const barX = Math.round((width - totalW) / 2);
+    const barY = height - SLOT_SIZE - 14;
 
     this.hotbarContainer = this.scene.add.container(barX, barY);
 
@@ -199,9 +202,9 @@ export class EquipmentHUD {
 
     const numLabel = this.scene.add
       .text(x + 4, y + 3, String(index + 1), {
-        fontSize: '9px',
-        fontFamily: 'Arial',
-        color: '#7a6040',
+        fontSize: "9px",
+        fontFamily: "Arial",
+        color: "#7a6040",
       })
       .setOrigin(0, 0);
     this.hotbarContainer.add(numLabel);
@@ -213,9 +216,9 @@ export class EquipmentHUD {
       .setScrollFactor(0)
       .setInteractive({ useHandCursor: true });
 
-    hit.on('pointerover', () => this.drawSlot(g, x, y, SLOT_SIZE, true));
-    hit.on('pointerout',  () => this.drawSlot(g, x, y, SLOT_SIZE, index === this.activeHotbar));
-    hit.on('pointerdown', () => {
+    hit.on("pointerover", () => this.drawSlot(g, x, y, SLOT_SIZE, true));
+    hit.on("pointerout", () => this.drawSlot(g, x, y, SLOT_SIZE, index === this.activeHotbar));
+    hit.on("pointerdown", () => {
       this.setActiveHotbar(index as HotbarSlot);
       const item = this.inventoryItems[index];
       if (item) void this.handleEquip(item);
@@ -237,14 +240,14 @@ export class EquipmentHUD {
     }
 
     // Remove new item from inventory bag
-    this.inventoryItems = this.inventoryItems.filter(i => i.id !== item.id);
+    this.inventoryItems = this.inventoryItems.filter((i) => i.id !== item.id);
 
     this.equippedItems.set(slot, item);
 
-    const g   = this.equipSlotGraphics.get(slot);
+    const g = this.equipSlotGraphics.get(slot);
     const lbl = this.equipSlotLabels.get(slot);
     const img = this.equipSlotImages.get(slot);
-    if (g)   this.drawSlot(g, 0, 0, SLOT_SIZE, true);
+    if (g) this.drawSlot(g, 0, 0, SLOT_SIZE, true);
     if (lbl) lbl.setVisible(false);
     if (img) img.setTexture(item.iconKey).setVisible(true);
 
@@ -258,11 +261,11 @@ export class EquipmentHUD {
 
     this.equippedItems.delete(slot);
 
-    const cfg = EQUIP_SLOTS.find(s => s.key === slot)!;
-    const g   = this.equipSlotGraphics.get(slot);
+    const cfg = EQUIP_SLOTS.find((s) => s.key === slot)!;
+    const g = this.equipSlotGraphics.get(slot);
     const lbl = this.equipSlotLabels.get(slot);
     const img = this.equipSlotImages.get(slot);
-    if (g)   this.drawSlot(g, 0, 0, SLOT_SIZE, false);
+    if (g) this.drawSlot(g, 0, 0, SLOT_SIZE, false);
     if (lbl) lbl.setText(cfg.label).setColor("#666655").setVisible(true);
     if (img) img.setVisible(false);
 
@@ -301,12 +304,17 @@ export class EquipmentHUD {
   setActiveHotbar(index: HotbarSlot) {
     const prev = this.activeHotbar;
     this.activeHotbar = index;
-    this.drawSlot(this.hotbarGraphics[prev],  10 + prev  * (SLOT_SIZE + SLOT_GAP), 5, SLOT_SIZE, false);
-    this.drawSlot(this.hotbarGraphics[index], 10 + index * (SLOT_SIZE + SLOT_GAP), 5, SLOT_SIZE, true);
+    const previousGraphics = this.hotbarGraphics[prev];
+    const activeGraphics = this.hotbarGraphics[index];
+    if (previousGraphics) {
+      this.drawSlot(previousGraphics, 10 + prev * (SLOT_SIZE + SLOT_GAP), 5, SLOT_SIZE, false);
+    }
+    if (activeGraphics) {
+      this.drawSlot(activeGraphics, 10 + index * (SLOT_SIZE + SLOT_GAP), 5, SLOT_SIZE, true);
+    }
   }
 
   destroy() {
     this.container.destroy(true);
   }
 }
-

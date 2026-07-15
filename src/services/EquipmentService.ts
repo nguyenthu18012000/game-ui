@@ -67,8 +67,8 @@ export class EquipmentService {
 
   getEquippedSprites(): string[] {
     return Object.values(this.playerEquipment)
-      .filter(Boolean)
-      .map((id) => this.equipment.get(id!)?.spriteKey || "")
+      .filter((id): id is string => id !== undefined)
+      .map((id) => this.equipment.get(id)?.spriteKey || "")
       .filter(Boolean);
   }
 }

@@ -132,10 +132,7 @@ export class TileMapTestScene extends Scene {
           break;
         case "arrowdown":
         case "s":
-          camera.scrollY = Math.min(
-            24000 - camera.height,
-            camera.scrollY + speed,
-          );
+          camera.scrollY = Math.min(24000 - camera.height, camera.scrollY + speed);
           break;
         case "arrowleft":
         case "a":
@@ -143,10 +140,7 @@ export class TileMapTestScene extends Scene {
           break;
         case "arrowright":
         case "d":
-          camera.scrollX = Math.min(
-            24000 - camera.width,
-            camera.scrollX + speed,
-          );
+          camera.scrollX = Math.min(24000 - camera.width, camera.scrollX + speed);
           break;
       }
     });
@@ -191,9 +185,7 @@ export class TileMapTestScene extends Scene {
     const mined = TileMapService.mineTile(this.tileMap, tile.x, tile.y);
     this.totalResources += mined;
 
-    Logger.info(
-      `Mined ${mined} resources from ${tile.type} at (${tile.x}, ${tile.y})`,
-    );
+    Logger.info(`Mined ${mined} resources from ${tile.type} at (${tile.x}, ${tile.y})`);
 
     // Cập nhật UI
     this.resourceText.setText(`Tài nguyên: ${this.totalResources}`);

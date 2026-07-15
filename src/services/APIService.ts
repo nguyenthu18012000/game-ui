@@ -2,17 +2,20 @@ import { Logger } from "../utils/logger";
 import { APIInterceptor } from "./APIInterceptor";
 import { API_BASE_URL } from "../constants/ApiConstants";
 
-export interface APIResponse<T = any> {
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+export interface APIResponse<T = unknown> {
   success: boolean;
   data?: T;
   message?: string;
-  error?: string;
+  error?: unknown;
 }
 
 export interface APIError {
   status: number;
   message: string;
-  data?: any;
+  data?: unknown;
 }
 
 const buildApiUrl = (baseURL: string, endpoint: string) => {
@@ -43,19 +46,16 @@ export class APIService {
   /**
    * GET request
    */
-  async get<T = any>(
-    endpoint: string,
-    options?: RequestInit,
-  ): Promise<APIResponse<T>> {
+  async get<T = unknown>(endpoint: string, options?: RequestInit): Promise<APIResponse<T>> {
     return this.request<T>("GET", endpoint, undefined, options);
   }
 
   /**
    * POST request
    */
-  async post<T = any>(
+  async post<T = unknown>(
     endpoint: string,
-    body?: any,
+    body?: unknown,
     options?: RequestInit,
   ): Promise<APIResponse<T>> {
     return this.request<T>("POST", endpoint, body, options);
@@ -64,9 +64,9 @@ export class APIService {
   /**
    * PUT request
    */
-  async put<T = any>(
+  async put<T = unknown>(
     endpoint: string,
-    body?: any,
+    body?: unknown,
     options?: RequestInit,
   ): Promise<APIResponse<T>> {
     return this.request<T>("PUT", endpoint, body, options);
@@ -75,36 +75,33 @@ export class APIService {
   /**
    * DELETE request
    */
-  async delete<T = any>(
-    endpoint: string,
-    options?: RequestInit,
-  ): Promise<APIResponse<T>> {
+  async delete<T = unknown>(endpoint: string, options?: RequestInit): Promise<APIResponse<T>> {
     return this.request<T>("DELETE", endpoint, undefined, options);
   }
 
   /**
    * Core request method
    */
-  private async request<T = any>(
+  private async request<T = unknown>(
     method: string,
     endpoint: string,
-    body?: any,
+    body?: unknown,
     options?: RequestInit,
   ): Promise<APIResponse<T>> {
     const url = buildApiUrl(this.baseURL, endpoint);
-    const headers: any = {
-      "Content-Type": "application/json",
-      ...(options?.headers || {}),
-    };
+    const headers = Object.fromEntries(new Headers(options?.headers).entries());
+    if (!headers["content-type"]) {
+      headers["content-type"] = "application/json";
+    }
 
     const config: RequestInit = {
+      ...options,
       method,
       headers,
-      ...options,
     };
 
     // Thêm body cho POST, PUT
-    if (body && (method === "POST" || method === "PUT")) {
+    if (body !== undefined && (method === "POST" || method === "PUT")) {
       config.body = JSON.stringify(body);
     }
 
@@ -115,21 +112,37 @@ export class APIService {
         url,
         headers,
         body,
+        options: config,
       });
 
       const controller = new AbortController();
+      const callerSignal = options?.signal;
+      const abortFromCaller = () => controller.abort(callerSignal?.reason);
+      if (callerSignal?.aborted) {
+        abortFromCaller();
+      } else {
+        callerSignal?.addEventListener("abort", abortFromCaller, { once: true });
+      }
       const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
-      let response = await fetch(url, {
-        method: interceptedRequest.method,
-        headers: interceptedRequest.headers,
-        body: interceptedRequest.body
-          ? JSON.stringify(interceptedRequest.body)
-          : config.body,
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
+      let response: Response;
+      try {
+        const requestInit: RequestInit = {
+          ...interceptedRequest.options,
+          method: interceptedRequest.method,
+          headers: interceptedRequest.headers,
+          signal: controller.signal,
+        };
+        const requestBody =
+          interceptedRequest.body !== undefined
+            ? JSON.stringify(interceptedRequest.body)
+            : interceptedRequest.options?.body;
+        if (requestBody !== undefined) requestInit.body = requestBody;
+        response = await fetch(url, requestInit);
+      } finally {
+        clearTimeout(timeoutId);
+        callerSignal?.removeEventListener("abort", abortFromCaller);
+      }
 
       // Gọi interceptor afterResponse (xử lý 401, refresh token, etc)
       const processedResponse = await APIInterceptor.afterResponse(response, {
@@ -137,6 +150,7 @@ export class APIService {
         url,
         headers: interceptedRequest.headers,
         body,
+        options: config,
       });
 
       if (!processedResponse) {
@@ -151,25 +165,30 @@ export class APIService {
       response = processedResponse;
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
+        const errorData: unknown = await response.json().catch(() => null);
         Logger.error(`✗ ${method} ${endpoint}`, errorData);
         return {
           success: false,
-          message: errorData.message || `HTTP ${response.status}`,
+          message:
+            isRecord(errorData) && typeof errorData.message === "string"
+              ? errorData.message
+              : `HTTP ${response.status}`,
           error: errorData,
         };
       }
 
-      const responseBody = await response.json();
+      const responseBody: unknown = await response.json();
       // Unwrap response envelope: { code, message, data } nếu có
-      const data: T = responseBody?.data !== undefined ? responseBody.data : responseBody;
+      const data = (
+        isRecord(responseBody) && responseBody.data !== undefined ? responseBody.data : responseBody
+      ) as T;
       Logger.debug(`✓ ${method} ${endpoint}`, data);
 
       return {
         success: true,
         data,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       const errorInfo = APIInterceptor.handleError(error);
       Logger.error(`✗ ${method} ${endpoint}`, errorInfo);
 

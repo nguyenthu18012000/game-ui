@@ -6,13 +6,14 @@ export interface InterceptorRequest {
   method: string;
   url: string;
   headers: Record<string, string>;
-  body?: any;
+  body?: unknown;
+  options?: RequestInit;
 }
 
 export interface InterceptorResponse {
   ok: boolean;
   status: number;
-  data: any;
+  data: unknown;
 }
 
 /**
@@ -25,9 +26,7 @@ export class APIInterceptor {
   /**
    * Xử lý request trước khi gửi
    */
-  static async beforeRequest(
-    request: InterceptorRequest,
-  ): Promise<InterceptorRequest> {
+  static async beforeRequest(request: InterceptorRequest): Promise<InterceptorRequest> {
     // Thêm token vào header
     const token = TokenService.getAccessToken();
     if (token) {
@@ -64,13 +63,17 @@ export class APIInterceptor {
 
           // Gửi lại request
           try {
-            const retryResponse = await fetch(newRequest.url, {
+            const retryInit: RequestInit = {
+              ...newRequest.options,
               method: newRequest.method,
               headers: newRequest.headers,
-              body: newRequest.body
+            };
+            const retryBody =
+              newRequest.body !== undefined
                 ? JSON.stringify(newRequest.body)
-                : undefined,
-            });
+                : newRequest.options?.body;
+            if (retryBody !== undefined) retryInit.body = retryBody;
+            const retryResponse = await fetch(newRequest.url, retryInit);
 
             return retryResponse;
           } catch (error) {
@@ -100,7 +103,7 @@ export class APIInterceptor {
   /**
    * Xử lý error
    */
-  static handleError(error: any): { message: string; error: string } {
+  static handleError(error: unknown): { message: string; error: string } {
     if (error instanceof TypeError && error.message === "Failed to fetch") {
       return {
         message: "Network error - check server connection",
@@ -108,7 +111,7 @@ export class APIInterceptor {
       };
     }
 
-    if (error.name === "AbortError") {
+    if (error instanceof DOMException && error.name === "AbortError") {
       return {
         message: "Request timeout",
         error: "TIMEOUT",
@@ -116,8 +119,8 @@ export class APIInterceptor {
     }
 
     return {
-      message: error.message || "Request failed",
-      error: error.name || "UNKNOWN_ERROR",
+      message: error instanceof Error ? error.message : "Request failed",
+      error: error instanceof Error ? error.name : "UNKNOWN_ERROR",
     };
   }
 }

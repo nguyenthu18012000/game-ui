@@ -1,9 +1,6 @@
 import * as Phaser from "phaser";
 import { Logger } from "../utils/logger";
-import {
-  CharacterService,
-  type CharacterDetail,
-} from "../services/CharacterService";
+import { CharacterService, type CharacterDetail } from "../services/CharacterService";
 import { Player } from "../entities/Player";
 
 interface InputField {
@@ -42,9 +39,7 @@ export class LobbyScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     // Back Button
-    const backBtn = this.add
-      .rectangle(50, 20, 80, 30, 0x4a4a4a)
-      .setInteractive();
+    const backBtn = this.add.rectangle(50, 20, 80, 30, 0x4a4a4a).setInteractive();
     this.add
       .text(50, 20, "BACK", {
         fontSize: "12px",
@@ -81,9 +76,7 @@ export class LobbyScene extends Phaser.Scene {
     (preview.body as Phaser.Physics.Arcade.Body).setEnable(false);
 
     // Start Game Button
-    const startBtn = this.add
-      .rectangle(cx, height - 50, 150, 40, 0x06a77d)
-      .setInteractive();
+    const startBtn = this.add.rectangle(cx, height - 50, 150, 40, 0x06a77d).setInteractive();
     this.add
       .text(cx, height - 50, "START GAME", {
         fontSize: "16px",
@@ -197,10 +190,7 @@ export class LobbyScene extends Phaser.Scene {
       const key = event.key;
 
       if (key === "Backspace") {
-        this.characterNameInput.value = this.characterNameInput.value.slice(
-          0,
-          -1,
-        );
+        this.characterNameInput.value = this.characterNameInput.value.slice(0, -1);
         this.updateInputDisplay();
       } else if (key === "Enter") {
         this.handleCreateCharacter();
@@ -253,9 +243,10 @@ export class LobbyScene extends Phaser.Scene {
         this.createPopup.destroy();
         this.renderCharacter(character);
       }
-    } catch (err: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Unknown error";
       this.popupErrorText.setColor("#e74c3c");
-      this.popupErrorText.setText("Lỗi: " + err.message);
+      this.popupErrorText.setText("Lỗi: " + message);
     } finally {
       this.isCreating = false;
     }

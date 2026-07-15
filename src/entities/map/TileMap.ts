@@ -1,8 +1,4 @@
-import type {
-  HarvestResult,
-  Tile,
-  TileMap as TileMapData,
-} from "../../types/Tile";
+import type { HarvestResult, Tile, TileMap as TileMapData } from "../../types/Tile";
 import { TileType } from "../../types/Tile";
 import { FarmableTile } from "./tiles/MapTile";
 
@@ -29,16 +25,11 @@ export class TileMap implements TileMapData {
   }
 
   getTile(gridX: number, gridY: number): Tile | null {
-    if (
-      gridX < 0 ||
-      gridX >= this.width ||
-      gridY < 0 ||
-      gridY >= this.height
-    ) {
+    if (gridX < 0 || gridX >= this.width || gridY < 0 || gridY >= this.height) {
       return null;
     }
 
-    return this.tiles[gridX][gridY];
+    return this.tiles[gridX]?.[gridY] ?? null;
   }
 
   getTileByPixel(pixelX: number, pixelY: number): Tile | null {
@@ -85,11 +76,7 @@ export class TileMap implements TileMapData {
     return depleted;
   }
 
-  harvestTile(
-    gridX: number,
-    gridY: number,
-    damage: number,
-  ): HarvestResult | null {
+  harvestTile(gridX: number, gridY: number, damage: number): HarvestResult | null {
     const tile = this.getTile(gridX, gridY);
     if (!(tile instanceof FarmableTile)) {
       return null;
@@ -128,7 +115,8 @@ export class TileMap implements TileMapData {
 
     for (let x = 0; x < this.width; x++) {
       for (let y = 0; y < this.height; y++) {
-        const tile = this.tiles[x][y];
+        const tile = this.getTile(x, y);
+        if (!tile) continue;
 
         switch (tile.type) {
           case TileType.EMPTY:

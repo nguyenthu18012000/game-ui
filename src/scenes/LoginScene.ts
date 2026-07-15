@@ -72,9 +72,7 @@ export class LoginScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     // Login Button
-    const loginBtn = this.add
-      .rectangle(width / 2, 400, 200, 50, 0x06a77d)
-      .setInteractive();
+    const loginBtn = this.add.rectangle(width / 2, 400, 200, 50, 0x06a77d).setInteractive();
 
     this.add
       .text(width / 2, 400, "LOGIN", {
@@ -114,7 +112,7 @@ export class LoginScene extends Phaser.Scene {
 
   private async handleLogin() {
     if (this.isLoading) return;
-    const { username, password } = this.form.getValues();
+    const { username = "", password = "" } = this.form.getValues();
     this.isLoading = true;
     this.errorText.setText("Đang đăng nhập...");
 
@@ -127,8 +125,9 @@ export class LoginScene extends Phaser.Scene {
       } else {
         this.showError(result.error || "Đăng nhập thất bại");
       }
-    } catch (error: any) {
-      this.showError("Lỗi kết nối: " + error.message);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      this.showError("Lỗi kết nối: " + message);
     } finally {
       this.isLoading = false;
     }

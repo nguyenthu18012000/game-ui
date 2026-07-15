@@ -15,9 +15,7 @@ export class CharacterService {
    * Trả về null nếu chưa có nhân vật
    */
   static async getDetail(): Promise<CharacterDetail | null> {
-    const response = await api.get<CharacterDetail>(
-      API_ENDPOINTS.CHARACTER.PROFILE,
-    );
+    const response = await api.get<CharacterDetail>(API_ENDPOINTS.CHARACTER.PROFILE);
     if (response.success && response.data) {
       Logger.info("Character detail loaded:", response.data);
       return response.data;

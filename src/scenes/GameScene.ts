@@ -14,9 +14,33 @@ const SPEED = 160;
 const MOVEMENT_SYNC_INTERVAL = 50;
 const POSITION_EPSILON = 1;
 
+interface RemoteMovePayload {
+  playerId?: string;
+  id?: string;
+  name?: string;
+  x: number;
+  y: number;
+  animation?: string;
+}
+
+const isRemoteMovePayload = (value: unknown): value is RemoteMovePayload => {
+  if (typeof value !== "object" || value === null) return false;
+  const payload = value as Record<string, unknown>;
+  const playerId = payload.playerId ?? payload.id;
+  return (
+    typeof playerId === "string" &&
+    typeof payload.x === "number" &&
+    Number.isFinite(payload.x) &&
+    typeof payload.y === "number" &&
+    Number.isFinite(payload.y) &&
+    (payload.name === undefined || typeof payload.name === "string") &&
+    (payload.animation === undefined || typeof payload.animation === "string")
+  );
+};
+
 export class GameScene extends Phaser.Scene {
   // Character from LobbyScene
-  private character!: CharacterDetail;
+  private character: CharacterDetail | null = null;
 
   // Gameplay
   private player!: Player;
@@ -49,12 +73,19 @@ export class GameScene extends Phaser.Scene {
     super({ key: "GameScene" });
   }
 
-  init(data: { character: CharacterDetail }) {
-    this.character = data.character;
+  init(data?: { character?: CharacterDetail }) {
+    this.character = data?.character ?? null;
   }
 
   create() {
     Logger.info("GameScene created");
+
+    if (!this.character) {
+      Logger.warn("GameScene started without character data; returning to LobbyScene");
+      this.scene.start("LobbyScene");
+      return;
+    }
+
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.cleanupSocket());
     this.events.once(Phaser.Scenes.Events.DESTROY, () => this.cleanupSocket());
     this.startPlaying(this.character);
@@ -89,15 +120,10 @@ export class GameScene extends Phaser.Scene {
     });
     nameText.setScrollFactor(0);
 
-    const instructionText = this.add.text(
-      10,
-      28,
-      "WASD / Arrow keys to move • Walk to farm",
-      {
-        fontSize: "11px",
-        color: "#aaaaaa",
-      },
-    );
+    const instructionText = this.add.text(10, 28, "WASD / Arrow keys to move • Walk to farm", {
+      fontSize: "11px",
+      color: "#aaaaaa",
+    });
     instructionText.setScrollFactor(0);
 
     // HUD - Resources
@@ -129,8 +155,10 @@ export class GameScene extends Phaser.Scene {
     // Equipment HUD
     this.equipmentHUD = new EquipmentHUD(this);
     this.equipmentHUD.onEquip = (item) => {
-      if (item.slot === "body") this.player.equipBody(item.spriteKey, item.animPrefix, item.assetFolder);
-      if (item.slot === "legs") this.player.equipLegs(item.spriteKey, item.animPrefix, item.assetFolder);
+      if (item.slot === "body")
+        this.player.equipBody(item.spriteKey, item.animPrefix, item.assetFolder);
+      if (item.slot === "legs")
+        this.player.equipLegs(item.spriteKey, item.animPrefix, item.assetFolder);
     };
     this.equipmentHUD.onUnequip = (slot) => {
       if (slot === "body") this.player.equipBody(null, null);
@@ -138,7 +166,7 @@ export class GameScene extends Phaser.Scene {
     };
 
     // Hotbar number keys 1-7 (highlight + equip item in that slot)
-    const hotbarKeys = ["ONE","TWO","THREE","FOUR","FIVE","SIX","SEVEN"] as const;
+    const hotbarKeys = ["ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN"] as const;
     hotbarKeys.forEach((name, i) => {
       this.input.keyboard!.on(`keydown-${name}`, () => {
         this.equipmentHUD.setActiveHotbar(i as HotbarSlot);
@@ -182,16 +210,26 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  private handleRemoteMove = (data: {
-    playerId?: string; id?: string; name?: string; x: number; y: number; animation?: string;
-  }) => {
+  private handleRemoteMove = (...args: unknown[]) => {
+    const data = args[0];
+    if (!isRemoteMovePayload(data)) {
+      Logger.warn("Ignored invalid remote player movement", data);
+      return;
+    }
     const playerId = data.playerId ?? data.id;
     if (!playerId || playerId === this.character?.id) return;
-    this.upsertRemotePlayer({
-      id: playerId, name: data.name ?? `Player ${playerId.slice(0, 4)}`,
-      x: data.x, y: data.y, level: 1, hp: 100, maxHp: 100,
-      equipment: {}, animation: data.animation,
-    });
+    const playerData: PlayerData = {
+      id: playerId,
+      name: data.name ?? `Player ${playerId.slice(0, 4)}`,
+      x: data.x,
+      y: data.y,
+      level: 1,
+      hp: 100,
+      maxHp: 100,
+      equipment: {},
+    };
+    if (data.animation !== undefined) playerData.animation = data.animation;
+    this.upsertRemotePlayer(playerData);
   };
 
   private upsertRemotePlayer(data: PlayerData) {
@@ -213,11 +251,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.player) return;
 
     // Get tile at player position
-    const tile = TileMapService.getTileByPixel(
-      this.tileMap,
-      this.player.x,
-      this.player.y,
-    );
+    const tile = TileMapService.getTileByPixel(this.tileMap, this.player.x, this.player.y);
 
     if (!tile || !tile.isFarmable || tile.isDepleted) return;
 
@@ -260,9 +294,7 @@ export class GameScene extends Phaser.Scene {
     this.farmCooldown -= this.game.loop.delta;
 
     // Update tile regeneration and get regenerated tiles
-    const regeneratedTiles = TileMapService.updateTileRegeneration(
-      this.tileMap,
-    );
+    const regeneratedTiles = TileMapService.updateTileRegeneration(this.tileMap);
 
     // Update visual for regenerated tiles
     regeneratedTiles.forEach((tile) => {

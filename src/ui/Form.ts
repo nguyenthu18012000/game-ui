@@ -1,5 +1,5 @@
 import * as Phaser from "phaser";
-import { InputField } from "./InputField";
+import type { InputField } from "./InputField";
 
 export interface FormFieldDef {
   name: string;
@@ -19,10 +19,7 @@ export class Form {
   private focusedIndex = 0;
   private readonly keyListener: (event: KeyboardEvent) => void;
 
-  constructor(
-    scene: Phaser.Scene,
-    config: FormConfig,
-  ) {
+  constructor(scene: Phaser.Scene, config: FormConfig) {
     this.scene = scene;
     this.fields = config.fields;
     this.onSubmit = config.onSubmit;
@@ -43,9 +40,8 @@ export class Form {
   }
 
   private _setFocus(index: number): void {
-    if (this.fields[this.focusedIndex]?.field.focused) {
-      this.fields[this.focusedIndex].field.blur();
-    }
+    const previousField = this.fields[this.focusedIndex]?.field;
+    if (previousField?.focused) previousField.blur();
     this.focusedIndex = index;
     this.fields[index]?.field.focus();
   }
@@ -82,9 +78,7 @@ export class Form {
 
   /** Returns current values keyed by field name. */
   getValues(): Record<string, string> {
-    return Object.fromEntries(
-      this.fields.map(({ name, field }) => [name, field.value]),
-    );
+    return Object.fromEntries(this.fields.map(({ name, field }) => [name, field.value]));
   }
 
   /** Validates all fields, then calls onSubmit if valid. */

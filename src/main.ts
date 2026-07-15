@@ -13,14 +13,7 @@ AuthEventListener.setup();
 
 const config: Phaser.Types.Core.GameConfig = {
   ...PHASER_CONFIG,
-  scene: [
-    LoadingScene,
-    MenuScene,
-    LoginScene,
-    RegisterScene,
-    LobbyScene,
-    GameScene,
-  ],
+  scene: [LoadingScene, MenuScene, LoginScene, RegisterScene, LobbyScene, GameScene],
 };
 
 const game = new Phaser.Game(config);
