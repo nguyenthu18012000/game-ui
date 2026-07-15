@@ -11,6 +11,7 @@
 import { TileMapService } from "../services/TileMapService";
 import { TileMapRenderer } from "../services/TileMapRenderer";
 import { Logger } from "../utils/logger";
+import type { TileMap } from "../types/Tile";
 
 /**
  * Ví dụ sử dụng hệ thống bản đồ
@@ -38,7 +39,7 @@ export class TileMapExample {
   /**
    * 3. LẤY THÔNG TIN ÔĐất TẠI VỊ TRÍ XÁC ĐỊNH
    */
-  static getTileInfo(tileMap: any, gridX: number, gridY: number) {
+  static getTileInfo(tileMap: TileMap, gridX: number, gridY: number) {
     const tile = TileMapService.getTile(tileMap, gridX, gridY);
     if (tile) {
       Logger.info(`Tile at (${gridX}, ${gridY}):
@@ -53,7 +54,7 @@ export class TileMapExample {
   /**
    * 4. LẤY THÔNG TIN ÔĐất TẠI VỊ TRÍ PIXEL (khi click chuột)
    */
-  static getTileAtPixel(tileMap: any, pixelX: number, pixelY: number) {
+  static getTileAtPixel(tileMap: TileMap, pixelX: number, pixelY: number) {
     const tile = TileMapService.getTileByPixel(tileMap, pixelX, pixelY);
     if (tile) {
       Logger.info(`Clicked tile at pixel (${pixelX}, ${pixelY}):
@@ -67,18 +68,16 @@ export class TileMapExample {
   /**
    * 5. ĐÀO TÀI NGUYÊN TỬ ÔĐất
    */
-  static mineTile(tileMap: any, gridX: number, gridY: number) {
+  static mineTile(tileMap: TileMap, gridX: number, gridY: number) {
     const resourceAmount = TileMapService.mineTile(tileMap, gridX, gridY);
-    Logger.info(
-      `Mined ${resourceAmount} resources from tile (${gridX}, ${gridY})`,
-    );
+    Logger.info(`Mined ${resourceAmount} resources from tile (${gridX}, ${gridY})`);
     return resourceAmount;
   }
 
   /**
    * 6. XEM THỐNG KÊ BẢN ĐỒ
    */
-  static getMapStatistics(tileMap: any) {
+  static getMapStatistics(tileMap: TileMap) {
     const stats = TileMapService.getMapStats(tileMap);
     Logger.info(`Map Statistics:
       - Grass tiles: ${stats.grassCount}

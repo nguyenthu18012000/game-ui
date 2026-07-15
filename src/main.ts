@@ -5,6 +5,7 @@ import { MenuScene } from "./scenes/MenuScene";
 import { LoginScene } from "./scenes/LoginScene";
 import { RegisterScene } from "./scenes/RegisterScene";
 import { GameScene } from "./scenes/GameScene";
+import { LobbyScene } from "./scenes/LobbyScene";
 import { AuthEventListener } from "./services/AuthEventListener";
 
 // Setup auth event listeners
@@ -12,13 +13,7 @@ AuthEventListener.setup();
 
 const config: Phaser.Types.Core.GameConfig = {
   ...PHASER_CONFIG,
-  scene: [
-    LoadingScene,
-    MenuScene,
-    LoginScene,
-    RegisterScene,
-    GameScene,
-  ],
+  scene: [LoadingScene, MenuScene, LoginScene, RegisterScene, LobbyScene, GameScene],
 };
 
 const game = new Phaser.Game(config);

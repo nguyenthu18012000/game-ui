@@ -1,8 +1,4 @@
-import type {
-  HarvestResult,
-  Tile,
-  TileMap as TileMapData,
-} from "../types/Tile";
+import type { HarvestResult, Tile, TileMap as TileMapData } from "../types/Tile";
 import { TileMap } from "../entities/map/TileMap";
 import type { TileMapStats } from "../entities/map/TileMap";
 import { TileMapGenerator } from "./TileMapGenerator";
@@ -30,32 +26,19 @@ export class TileMapService {
     return tileMap;
   }
 
-  static getTile(
-    tileMap: TileMapData,
-    gridX: number,
-    gridY: number,
-  ): Tile | null {
+  static getTile(tileMap: TileMapData, gridX: number, gridY: number): Tile | null {
     if (tileMap instanceof TileMap) {
       return tileMap.getTile(gridX, gridY);
     }
 
-    if (
-      gridX < 0 ||
-      gridX >= tileMap.width ||
-      gridY < 0 ||
-      gridY >= tileMap.height
-    ) {
+    if (gridX < 0 || gridX >= tileMap.width || gridY < 0 || gridY >= tileMap.height) {
       return null;
     }
 
-    return tileMap.tiles[gridX][gridY];
+    return tileMap.tiles[gridX]?.[gridY] ?? null;
   }
 
-  static getTileByPixel(
-    tileMap: TileMapData,
-    pixelX: number,
-    pixelY: number,
-  ): Tile | null {
+  static getTileByPixel(tileMap: TileMapData, pixelX: number, pixelY: number): Tile | null {
     if (tileMap instanceof TileMap) {
       return tileMap.getTileByPixel(pixelX, pixelY);
     }
@@ -160,9 +143,7 @@ export class TileMapService {
     };
   }
 
-  static updateTileRegeneration(
-    tileMap: TileMapData,
-  ): Array<{ x: number; y: number }> {
+  static updateTileRegeneration(tileMap: TileMapData): Array<{ x: number; y: number }> {
     if (tileMap instanceof TileMap) {
       return tileMap
         .updateRegeneration(this.REGENERATION_TIME)
@@ -180,11 +161,7 @@ export class TileMapService {
   }
 
   static getHealthPercentage(tile: Tile): number {
-    if (
-      !tile.isFarmable ||
-      tile.maxHealth === undefined ||
-      tile.maxHealth === 0
-    ) {
+    if (!tile.isFarmable || tile.maxHealth === undefined || tile.maxHealth === 0) {
       return 1;
     }
 
@@ -204,7 +181,8 @@ export class TileMapService {
 
     for (let x = 0; x < tileMap.width; x++) {
       for (let y = 0; y < tileMap.height; y++) {
-        const tile = tileMap.tiles[x][y];
+        const tile = tileMap.tiles[x]?.[y];
+        if (!tile) continue;
 
         if (tile.type === "empty") emptyCount++;
         if (tile.type === "grass") grassCount++;
@@ -217,5 +195,4 @@ export class TileMapService {
 
     return { emptyCount, grassCount, landCount, rockCount, totalResources };
   }
-
 }

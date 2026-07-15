@@ -1,4 +1,4 @@
-import type { TileMap } from "../types/Tile";
+import type { Tile, TileMap } from "../types/Tile";
 import { TileType, MapObjectType } from "../types/Tile";
 import { Logger } from "../utils/logger";
 import { TileMapService } from "./TileMapService";
@@ -42,18 +42,12 @@ export class TileMapRenderer {
     const tileSize = this.tileMap.tileSize;
 
     // Calculate viewport bounds in grid coordinates
-    const minX = Math.max(
-      0,
-      Math.floor(camera.scrollX / tileSize) - this.BUFFER_SIZE,
-    );
+    const minX = Math.max(0, Math.floor(camera.scrollX / tileSize) - this.BUFFER_SIZE);
     const maxX = Math.min(
       this.tileMap.width - 1,
       Math.ceil((camera.scrollX + camera.width) / tileSize) + this.BUFFER_SIZE,
     );
-    const minY = Math.max(
-      0,
-      Math.floor(camera.scrollY / tileSize) - this.BUFFER_SIZE,
-    );
+    const minY = Math.max(0, Math.floor(camera.scrollY / tileSize) - this.BUFFER_SIZE);
     const maxY = Math.min(
       this.tileMap.height - 1,
       Math.ceil((camera.scrollY + camera.height) / tileSize) + this.BUFFER_SIZE,
@@ -84,7 +78,8 @@ export class TileMapRenderer {
           continue;
         }
 
-        const tile = this.tileMap.tiles[x][y];
+        const tile = this.getTile(x, y);
+        if (!tile) continue;
         this.drawTile(tile);
       }
     }
@@ -93,16 +88,12 @@ export class TileMapRenderer {
   /**
    * Remove tiles that are now outside viewport
    */
-  private clearOutdatedTiles(
-    minX: number,
-    maxX: number,
-    minY: number,
-    maxY: number,
-  ): void {
+  private clearOutdatedTiles(minX: number, maxX: number, minY: number, maxY: number): void {
     const keysToRemove: string[] = [];
 
     this.visibleTiles.forEach((rect, key) => {
       const [x, y] = key.split(",").map(Number);
+      if (x === undefined || y === undefined) return;
 
       if (x < minX || x > maxX || y < minY || y > maxY) {
         rect.destroy();
@@ -131,7 +122,7 @@ export class TileMapRenderer {
   /**
    * Draw a single tile
    */
-  private drawTile(tile: any): void {
+  private drawTile(tile: Tile): void {
     const size = this.tileMap.tileSize;
     let color = this.getTileColor(tile.type);
     const key = `${tile.x},${tile.y}`;
@@ -173,7 +164,7 @@ export class TileMapRenderer {
   /**
    * Draw health bar for a farmable tile
    */
-  private drawHealthBar(tile: any): void {
+  private drawHealthBar(tile: Tile): void {
     const size = this.tileMap.tileSize;
     const barWidth = size - 4;
     const barHeight = 3;
@@ -202,17 +193,16 @@ export class TileMapRenderer {
 
     this.tileContainer.add([bgBar, healthBar]);
 
-    if (!this.visibleHealthBars.has(key)) {
-      this.visibleHealthBars.set(key, []);
-    }
-    this.visibleHealthBars.get(key)!.push(bgBar, healthBar);
+    const bars = this.visibleHealthBars.get(key) ?? [];
+    bars.push(bgBar, healthBar);
+    this.visibleHealthBars.set(key, bars);
   }
 
   /**
    * Update health bar for a tile
    */
   updateTileHealthBar(gridX: number, gridY: number): void {
-    const tile = this.tileMap.tiles[gridX][gridY];
+    const tile = this.getTile(gridX, gridY);
     if (!tile) return;
 
     const key = `${gridX},${gridY}`;
@@ -259,13 +249,14 @@ export class TileMapRenderer {
   /**
    * Draw a map object on a tile
    */
-  private drawMapObject(tile: any): void {
+  private drawMapObject(tile: Tile): void {
     const size = this.tileMap.tileSize;
     const cx = tile.pixelX + size / 2;
     const cy = tile.pixelY + size / 2;
     const key = `${tile.x},${tile.y}`;
 
     const object = tile.object;
+    if (!object) return;
     let symbol = "?";
     let color = 0xffffff;
 
@@ -305,10 +296,9 @@ export class TileMapRenderer {
     this.tileContainer.add([objCircle, objText]);
 
     // Track objects for cleanup
-    if (!this.visibleObjects.has(key)) {
-      this.visibleObjects.set(key, []);
-    }
-    this.visibleObjects.get(key)!.push(objCircle, objText);
+    const objects = this.visibleObjects.get(key) ?? [];
+    objects.push(objCircle, objText);
+    this.visibleObjects.set(key, objects);
   }
 
   /**
@@ -333,7 +323,7 @@ export class TileMapRenderer {
    * Update tile visual after farming or regeneration
    */
   updateTileVisual(gridX: number, gridY: number): void {
-    const tile = this.tileMap.tiles[gridX][gridY];
+    const tile = this.getTile(gridX, gridY);
     if (!tile) return;
 
     this.updateTileHealthBar(gridX, gridY);
@@ -344,5 +334,9 @@ export class TileMapRenderer {
    */
   getTileMap(): TileMap {
     return this.tileMap;
+  }
+
+  private getTile(gridX: number, gridY: number): Tile | null {
+    return this.tileMap.tiles[gridX]?.[gridY] ?? null;
   }
 }

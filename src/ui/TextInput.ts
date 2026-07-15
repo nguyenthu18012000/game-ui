@@ -1,4 +1,4 @@
-import * as Phaser from "phaser";
+import type * as Phaser from "phaser";
 
 export interface TextInputOptions {
   label: string;
@@ -39,27 +39,17 @@ export class TextInput {
     this.background.setStrokeStyle(2, 0x06a77d);
     this.background.setInteractive();
 
-    const labelText = scene.add.text(
-      -width / 2 + 10,
-      -height / 2,
-      options.label,
-      {
-        fontSize: labelFontSize,
-        fontFamily: "Arial",
-        color: "#888888",
-      },
-    );
+    const labelText = scene.add.text(-width / 2 + 10, -height / 2, options.label, {
+      fontSize: labelFontSize,
+      fontFamily: "Arial",
+      color: "#888888",
+    });
 
-    this.inputText = scene.add.text(
-      -width / 2 + 20,
-      -height / 2 + 12,
-      this.placeholder,
-      {
-        fontSize: inputFontSize,
-        fontFamily: "Arial",
-        color: "#888888",
-      },
-    );
+    this.inputText = scene.add.text(-width / 2 + 20, -height / 2 + 12, this.placeholder, {
+      fontSize: inputFontSize,
+      fontFamily: "Arial",
+      color: "#888888",
+    });
 
     this.messageText = scene.add.text(-width / 2 + 10, height / 2 + 4, "", {
       fontSize: "11px",
@@ -67,12 +57,7 @@ export class TextInput {
       color: "#e74c3c",
     });
 
-    this.container.add([
-      this.background,
-      labelText,
-      this.inputText,
-      this.messageText,
-    ]);
+    this.container.add([this.background, labelText, this.inputText, this.messageText]);
 
     this.background.on("pointerdown", () => {
       this.focus();

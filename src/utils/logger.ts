@@ -10,7 +10,7 @@ export type LogLevelType = (typeof LogLevel)[keyof typeof LogLevel];
 export class Logger {
   private static isDevelopment = import.meta.env.DEV;
 
-  static log(level: LogLevelType, message: string, data?: any) {
+  static log(level: LogLevelType, message: string, data?: unknown) {
     const timestamp = new Date().toLocaleTimeString();
     const prefix = `[${timestamp}] [${level}]`;
 
@@ -23,19 +23,19 @@ export class Logger {
     }
   }
 
-  static debug(message: string, data?: any) {
+  static debug(message: string, data?: unknown) {
     Logger.log(LogLevel.DEBUG, message, data);
   }
 
-  static info(message: string, data?: any) {
+  static info(message: string, data?: unknown) {
     Logger.log(LogLevel.INFO, message, data);
   }
 
-  static warn(message: string, data?: any) {
+  static warn(message: string, data?: unknown) {
     Logger.log(LogLevel.WARN, message, data);
   }
 
-  static error(message: string, error?: any) {
+  static error(message: string, error?: unknown) {
     Logger.log(LogLevel.ERROR, message, error);
   }
 }

@@ -1,17 +1,59 @@
 import { Logger } from "../utils/logger";
-import { TokenService } from "./TokenService";
+import { TokenService, type AuthTokens } from "./TokenService";
 import { API_BASE_URL, API_ENDPOINTS } from "../constants/ApiConstants";
 
 const getApiUrl = (endpoint: string) => `${API_BASE_URL}/${endpoint}`;
+
+type AuthResult = { success: true; data: unknown } | { success: false; error: string };
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const getString = (value: Record<string, unknown>, ...keys: string[]): string | undefined => {
+  for (const key of keys) {
+    const candidate = value[key];
+    if (typeof candidate === "string" && candidate.length > 0) {
+      return candidate;
+    }
+  }
+
+  return undefined;
+};
+
+export const extractTokens = (responseBody: unknown, fallbackRefreshToken?: string): AuthTokens => {
+  if (!isRecord(responseBody)) {
+    throw new Error("Invalid authentication response");
+  }
+
+  const payload = isRecord(responseBody.data) ? responseBody.data : responseBody;
+  const accessToken = getString(payload, "accessToken", "token", "access_token");
+  const refreshToken = getString(payload, "refreshToken", "refresh_token") ?? fallbackRefreshToken;
+
+  if (!accessToken) {
+    throw new Error("Access token not found in authentication response");
+  }
+
+  return refreshToken ? { accessToken, refreshToken } : { accessToken };
+};
+
+const getErrorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : "Authentication request failed";
+
+const getResponseError = async (response: Response, fallbackMessage: string): Promise<string> => {
+  const body: unknown = await response.json().catch(() => null);
+  return isRecord(body) && typeof body.message === "string" ? body.message : fallbackMessage;
+};
 
 /**
  * AuthService - Quản lý authentication
  */
 export class AuthService {
+  private static refreshPromise: Promise<AuthResult> | null = null;
+
   /**
    * Login - gọi API + lưu token
    */
-  static async login(username: string, password: string) {
+  static async login(username: string, password: string): Promise<AuthResult> {
     try {
       const response = await fetch(getApiUrl(API_ENDPOINTS.AUTH.LOGIN), {
         method: "POST",
@@ -22,40 +64,25 @@ export class AuthService {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || "Login failed");
+        throw new Error(await getResponseError(response, "Login failed"));
       }
 
-      const body = await response.json();
-
-      // Response được wrap: { code, message, data: { accessToken, refreshToken } }
-      const payload = body.data ?? body;
-      const accessToken =
-        payload.accessToken ?? payload.token ?? payload.access_token;
-      const refreshToken = payload.refreshToken ?? payload.refresh_token ?? undefined;
-
-      if (!accessToken) {
-        console.error(
-          "[AuthService] accessToken không tìm thấy trong response:",
-          body,
-        );
-        throw new Error("accessToken not found in response");
-      }
-
-      TokenService.saveTokens({ accessToken, refreshToken: refreshToken ?? undefined });
+      const body: unknown = await response.json();
+      TokenService.saveTokens(extractTokens(body));
 
       Logger.info("Login successful");
       return { success: true, data: body };
-    } catch (error: any) {
-      Logger.error("Login error", error.message);
-      return { success: false, error: error.message };
+    } catch (error: unknown) {
+      const message = getErrorMessage(error);
+      Logger.error("Login error", message);
+      return { success: false, error: message };
     }
   }
 
   /**
    * Register - tạo account + lưu token
    */
-  static async register(username: string, password: string) {
+  static async register(username: string, password: string): Promise<AuthResult> {
     try {
       const response = await fetch(getApiUrl(API_ENDPOINTS.AUTH.REGISTER), {
         method: "POST",
@@ -66,40 +93,35 @@ export class AuthService {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || "Registration failed");
+        throw new Error(await getResponseError(response, "Registration failed"));
       }
 
-      const body = await response.json();
-
-      // Response được wrap: { code, message, data: { accessToken, refreshToken } }
-      const payload = body.data ?? body;
-      const accessToken =
-        payload.accessToken ?? payload.token ?? payload.access_token;
-      const refreshToken = payload.refreshToken ?? payload.refresh_token ?? undefined;
-
-      if (!accessToken) {
-        console.error(
-          "[AuthService] accessToken không tìm thấy trong response:",
-          body,
-        );
-        throw new Error("accessToken not found in response");
-      }
-
-      TokenService.saveTokens({ accessToken, refreshToken: refreshToken ?? undefined });
+      const body: unknown = await response.json();
+      TokenService.saveTokens(extractTokens(body));
 
       Logger.info("Registration successful");
       return { success: true, data: body };
-    } catch (error: any) {
-      Logger.error("Register error", error.message);
-      return { success: false, error: error.message };
+    } catch (error: unknown) {
+      const message = getErrorMessage(error);
+      Logger.error("Register error", message);
+      return { success: false, error: message };
     }
   }
 
   /**
    * Refresh access token
    */
-  static async refreshAccessToken() {
+  static refreshAccessToken(): Promise<AuthResult> {
+    if (!AuthService.refreshPromise) {
+      AuthService.refreshPromise = AuthService.performTokenRefresh().finally(() => {
+        AuthService.refreshPromise = null;
+      });
+    }
+
+    return AuthService.refreshPromise;
+  }
+
+  private static async performTokenRefresh(): Promise<AuthResult> {
     try {
       const refreshToken = TokenService.getRefreshToken();
       if (!refreshToken) {
@@ -115,24 +137,20 @@ export class AuthService {
       });
 
       if (!response.ok) {
-        throw new Error("Token refresh failed");
+        throw new Error(await getResponseError(response, "Token refresh failed"));
       }
 
-      const data = await response.json();
-
-      // Update token (response: { accessToken, refreshToken })
-      TokenService.saveTokens({
-        accessToken: data.accessToken,
-        refreshToken: data.refreshToken,
-      });
+      const body: unknown = await response.json();
+      TokenService.saveTokens(extractTokens(body, refreshToken));
 
       Logger.info("Token refreshed");
-      return { success: true, data };
-    } catch (error: any) {
-      Logger.error("Token refresh error", error.message);
+      return { success: true, data: body };
+    } catch (error: unknown) {
+      const message = getErrorMessage(error);
+      Logger.error("Token refresh error", message);
       // Token hết hạn, cần login lại
       TokenService.clearTokens();
-      return { success: false, error: error.message };
+      return { success: false, error: message };
     }
   }
 
@@ -148,9 +166,7 @@ export class AuthService {
    * Kiểm tra user đã login chưa
    */
   static isLoggedIn(): boolean {
-    return (
-      TokenService.getAccessToken() !== null && !TokenService.isTokenExpired()
-    );
+    return TokenService.getAccessToken() !== null && !TokenService.isTokenExpired();
   }
 
   /**

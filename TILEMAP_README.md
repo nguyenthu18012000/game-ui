@@ -9,12 +9,12 @@ Bản đồ game được chia thành lưới **400x400 ô** (24000x24000 đơn 
 
 ## Các Loại Ô Đất
 
-| Loại | Màu | Phần Trăm | Tài Nguyên |
-|------|-----|----------|-----------|
-| ⬜ Trống (Empty) | Xám tối | 30% | 0 |
-| 🌾 Cỏ (Grass) | Xanh lá | 35% | 10-30 |
-| 🟫 Đất (Land) | Nâu | 20% | 30-80 |
-| ⬜ Đá (Rock) | Xám | 15% | 50-150 |
+| Loại             | Màu     | Phần Trăm | Tài Nguyên |
+| ---------------- | ------- | --------- | ---------- |
+| ⬜ Trống (Empty) | Xám tối | 30%       | 0          |
+| 🌾 Cỏ (Grass)    | Xanh lá | 35%       | 10-30      |
+| 🟫 Đất (Land)    | Nâu     | 20%       | 30-80      |
+| ⬜ Đá (Rock)     | Xám     | 15%       | 50-150     |
 
 ## Cấu Trúc File
 
@@ -133,11 +133,7 @@ export class GameScene extends Scene {
 
   private handleTileClick(pointer: Phaser.Input.Pointer) {
     // Lấy tile tại vị trí click
-    const tile = TileMapService.getTileByPixel(
-      this.tileMap,
-      pointer.x,
-      pointer.y,
-    );
+    const tile = TileMapService.getTileByPixel(this.tileMap, pointer.x, pointer.y);
 
     if (!tile) return;
 
@@ -155,14 +151,16 @@ export class GameScene extends Scene {
 
 ```typescript
 // Grid Coordinates → Pixel Coordinates
-const gridX = 50, gridY = 100;
-const pixelX = gridX * 60;      // 3000
-const pixelY = gridY * 60;      // 6000
+const gridX = 50,
+  gridY = 100;
+const pixelX = gridX * 60; // 3000
+const pixelY = gridY * 60; // 6000
 
 // Pixel Coordinates → Grid Coordinates
-const px = 3000, py = 6000;
-const gx = Math.floor(px / 60);  // 50
-const gy = Math.floor(py / 60);  // 100
+const px = 3000,
+  py = 6000;
+const gx = Math.floor(px / 60); // 50
+const gy = Math.floor(py / 60); // 100
 
 // Map bounds
 // Min: (0, 0)

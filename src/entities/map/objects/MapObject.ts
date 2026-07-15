@@ -4,7 +4,8 @@ import { DamageableMapEntity } from "../MapEntity";
 
 export abstract class MapObjectEntity
   extends DamageableMapEntity<MapObjectType>
-  implements MapObject {
+  implements MapObject
+{
   protected constructor(type: MapObjectType, health?: number) {
     super(type, health ?? 0);
   }
@@ -28,7 +29,7 @@ export abstract class MapObjectEntity
 
     this.health = this.maxHealth;
     this.isDepleted = false;
-    this.depletedAt = undefined;
+    delete this.depletedAt;
   }
 }
 

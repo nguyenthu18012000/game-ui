@@ -79,23 +79,16 @@ export class MenuScene extends Phaser.Scene {
 
     // Welcome text
     this.add
-      .text(
-        width / 2,
-        height / 2 - 60,
-        `Welcome, ${user?.username || "Player"}!`,
-        {
-          fontSize: "24px",
-          fontFamily: "Arial",
-          color: "#06a77d",
-          align: "center",
-        },
-      )
+      .text(width / 2, height / 2 - 60, `Welcome, ${user?.username || "Player"}!`, {
+        fontSize: "24px",
+        fontFamily: "Arial",
+        color: "#06a77d",
+        align: "center",
+      })
       .setOrigin(0.5);
 
     // Play Button
-    const playBtn = this.add
-      .rectangle(width / 2, height / 2, 150, 50, 0x06a77d)
-      .setInteractive();
+    const playBtn = this.add.rectangle(width / 2, height / 2, 150, 50, 0x06a77d).setInteractive();
 
     this.add
       .text(width / 2, height / 2, "PLAY", {
@@ -108,7 +101,7 @@ export class MenuScene extends Phaser.Scene {
 
     playBtn.on("pointerdown", () => {
       Logger.info("MenuScene: Starting game");
-      this.scene.start("GameScene");
+      this.scene.start("LobbyScene");
     });
 
     // Logout Button

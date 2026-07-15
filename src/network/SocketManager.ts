@@ -2,12 +2,15 @@ import { SOCKET_EVENTS } from "../constants/SocketEvents";
 import { WEBSOCKET_SERVER_URL } from "../constants/GameConfig";
 import { Logger } from "../utils/logger";
 
-type SocketCallback = (...args: any[]) => void;
+type SocketCallback = (...args: unknown[]) => void;
 
-interface SocketMessage<T = any> {
+interface SocketMessage<T = unknown> {
   event?: string;
   payload?: T;
 }
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
 
 export class SocketManager {
   private socket: WebSocket | null = null;
@@ -51,13 +54,22 @@ export class SocketManager {
     };
 
     this.socket.onmessage = (message) => {
-      this.handleMessage(message.data);
+      if (typeof message.data === "string") {
+        this.handleMessage(message.data);
+      } else {
+        Logger.warn("Unsupported WebSocket message type");
+      }
     };
   }
 
   private handleMessage(data: string) {
     try {
-      const message = JSON.parse(data) as SocketMessage;
+      const parsed: unknown = JSON.parse(data);
+      if (!isRecord(parsed)) {
+        Logger.warn("Ignored invalid WebSocket message");
+        return;
+      }
+      const message: SocketMessage = parsed;
 
       if (message.event && "payload" in message) {
         this.dispatch(message.event, message.payload);
@@ -75,17 +87,18 @@ export class SocketManager {
     }
   }
 
-  private isMovePayload(message: SocketMessage) {
+  private isMovePayload(message: unknown): message is Record<string, unknown> {
     return (
-      typeof message === "object" &&
-      message !== null &&
+      isRecord(message) &&
       ("playerId" in message || "id" in message) &&
-      "x" in message &&
-      "y" in message
+      typeof message.x === "number" &&
+      Number.isFinite(message.x) &&
+      typeof message.y === "number" &&
+      Number.isFinite(message.y)
     );
   }
 
-  private dispatch(event: string, ...args: any[]) {
+  private dispatch(event: string, ...args: unknown[]) {
     const callbacks = this.listeners.get(event);
     if (!callbacks) return;
 
@@ -103,7 +116,7 @@ export class SocketManager {
     return this.connected;
   }
 
-  emit(event: string, data: any) {
+  emit(event: string, data: unknown) {
     const message = JSON.stringify({ event, payload: data });
 
     if (!this.socket) {

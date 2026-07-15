@@ -2,9 +2,7 @@ import type { HarvestResult, MapObject, Tile, TileReward } from "../../../types/
 import { TileType } from "../../../types/Tile";
 import { PositionedMapEntity } from "../MapEntity";
 
-export abstract class MapTile
-  extends PositionedMapEntity<TileType>
-  implements Tile {
+export abstract class MapTile extends PositionedMapEntity<TileType> implements Tile {
   readonly isFarmable: boolean;
   resourceAmount: number;
   isExplored = false;
@@ -35,6 +33,9 @@ export class EmptyTile extends MapTile {
 }
 
 export abstract class FarmableTile extends MapTile {
+  declare health: number;
+  declare maxHealth: number;
+
   protected constructor(
     x: number,
     y: number,
@@ -49,11 +50,7 @@ export abstract class FarmableTile extends MapTile {
   }
 
   damage(amount: number): boolean {
-    if (
-      this.isDepleted ||
-      this.health === undefined ||
-      this.maxHealth === undefined
-    ) {
+    if (this.isDepleted || this.health === undefined || this.maxHealth === undefined) {
       return false;
     }
 
@@ -82,7 +79,7 @@ export abstract class FarmableTile extends MapTile {
   regenerate() {
     this.health = this.maxHealth;
     this.isDepleted = false;
-    this.depletedAt = undefined;
+    delete this.depletedAt;
   }
 
   protected createReward(): TileReward {

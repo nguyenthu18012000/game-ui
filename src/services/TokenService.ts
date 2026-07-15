@@ -122,7 +122,9 @@ export class TokenService {
       const parts = token.split(".");
       if (parts.length !== 3) return null;
 
-      const payload = JSON.parse(atob(parts[1]));
+      const encodedPayload = parts[1];
+      if (!encodedPayload) return null;
+      const payload = JSON.parse(atob(encodedPayload));
       return payload as TokenPayload;
     } catch (error) {
       Logger.error("Failed to decode token", error);

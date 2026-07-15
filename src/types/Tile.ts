@@ -1,23 +1,25 @@
 /**
  * Tile Types in the game world
  */
-export enum TileType {
-  EMPTY = "empty",
-  GRASS = "grass",
-  LAND = "land",
-  ROCK = "rock",
-}
+export const TileType = {
+  EMPTY: "empty",
+  GRASS: "grass",
+  LAND: "land",
+  ROCK: "rock",
+} as const;
+export type TileType = (typeof TileType)[keyof typeof TileType];
 
 /**
  * Map Objects that can be placed on tiles
  */
-export enum MapObjectType {
-  TREE = "tree",
-  BUILDING = "building",
-  ROCK_PILE = "rock_pile",
-  CHEST = "chest",
-  WELL = "well",
-}
+export const MapObjectType = {
+  TREE: "tree",
+  BUILDING: "building",
+  ROCK_PILE: "rock_pile",
+  CHEST: "chest",
+  WELL: "well",
+} as const;
+export type MapObjectType = (typeof MapObjectType)[keyof typeof MapObjectType];
 
 /**
  * Represents a map object on a tile

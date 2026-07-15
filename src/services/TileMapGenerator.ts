@@ -8,12 +8,7 @@ import {
   TreeObject,
   WellObject,
 } from "../entities/map/objects/MapObject";
-import {
-  EmptyTile,
-  GrassTile,
-  LandTile,
-  RockTile,
-} from "../entities/map/tiles/MapTile";
+import { EmptyTile, GrassTile, LandTile, RockTile } from "../entities/map/tiles/MapTile";
 
 export interface TileMapGeneratorOptions {
   width: number;
@@ -26,7 +21,8 @@ export class TileMapGenerator {
     const tiles: Tile[][] = [];
 
     for (let x = 0; x < options.width; x++) {
-      tiles[x] = [];
+      const column: Tile[] = [];
+      tiles.push(column);
 
       for (let y = 0; y < options.height; y++) {
         const tile = this.createTile(x, y, options.tileSize);
@@ -35,7 +31,7 @@ export class TileMapGenerator {
           tile.object = this.createRandomMapObject();
         }
 
-        tiles[x][y] = tile;
+        column.push(tile);
       }
     }
 
@@ -55,6 +51,8 @@ export class TileMapGenerator {
         return new RockTile(x, y, tileSize, resourceAmount);
       case TileType.EMPTY:
         return new EmptyTile(x, y, tileSize);
+      default:
+        throw new Error(`Unsupported tile type: ${String(tileType)}`);
     }
   }
 
@@ -83,11 +81,13 @@ export class TileMapGenerator {
         return Math.floor(Math.random() * 100) + 50;
       case TileType.EMPTY:
         return 0;
+      default:
+        throw new Error(`Unsupported tile type: ${String(tileType)}`);
     }
   }
 
   private static createRandomMapObject(): MapObject {
-    const objectTypes = [
+    const objectTypes: MapObjectType[] = [
       MapObjectType.TREE,
       MapObjectType.TREE,
       MapObjectType.TREE,
@@ -97,7 +97,7 @@ export class TileMapGenerator {
       MapObjectType.WELL,
     ];
     const randomType =
-      objectTypes[Math.floor(Math.random() * objectTypes.length)];
+      objectTypes[Math.floor(Math.random() * objectTypes.length)] ?? MapObjectType.TREE;
 
     switch (randomType) {
       case MapObjectType.TREE:
@@ -110,6 +110,8 @@ export class TileMapGenerator {
         return new ChestObject();
       case MapObjectType.WELL:
         return new WellObject();
+      default:
+        throw new Error(`Unsupported map object type: ${String(randomType)}`);
     }
   }
 }
