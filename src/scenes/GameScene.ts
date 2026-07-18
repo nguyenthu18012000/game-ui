@@ -2,9 +2,6 @@ import * as Phaser from "phaser";
 import { Logger } from "../utils/logger";
 import { Player } from "../entities/Player";
 import type { CharacterDetail } from "../services/CharacterService";
-import { TileMapService } from "../services/TileMapService";
-import { TileMapRenderer } from "../services/TileMapRenderer";
-import type { TileMap } from "../types/Tile";
 import type { PlayerData } from "../types/Player";
 import { SocketManager } from "../network/SocketManager";
 import { SOCKET_EVENTS } from "../constants/SocketEvents";
@@ -13,6 +10,11 @@ import { EquipmentHUD, type HotbarSlot } from "../ui/EquipmentHUD";
 const SPEED = 160;
 const MOVEMENT_SYNC_INTERVAL = 50;
 const POSITION_EPSILON = 1;
+const WORLD_WIDTH = 6000;
+const WORLD_HEIGHT = 6000;
+const SPAWN_X = WORLD_WIDTH / 2;
+const SPAWN_Y = WORLD_HEIGHT / 2;
+const GRID_SIZE = 300;
 
 interface RemoteMovePayload {
   playerId?: string;
@@ -56,15 +58,7 @@ export class GameScene extends Phaser.Scene {
     right: Phaser.Input.Keyboard.Key;
   };
 
-  // TileMap
-  private tileMap!: TileMap;
-  private tileMapRenderer!: TileMapRenderer;
-  private totalResourcesMined = 0;
-  private resourcesUI!: Phaser.GameObjects.Text;
   private coordinatesUI!: Phaser.GameObjects.Text;
-  private lastFarmedTile: { x: number; y: number } | null = null;
-  private farmCooldown = 0;
-  private readonly FARM_COOLDOWN_TIME = 500; // 500ms between farms
 
   // HUD
   private equipmentHUD!: EquipmentHUD;
@@ -96,20 +90,22 @@ export class GameScene extends Phaser.Scene {
   private startPlaying(character: CharacterDetail) {
     Logger.info("Starting game for character:", character.name);
 
-    // Create tilemap
-    this.tileMap = TileMapService.generateMap();
-    this.tileMapRenderer = new TileMapRenderer(this);
-    this.tileMapRenderer.renderMap(this.tileMap);
-
     // Setup physics world bounds
-    this.physics.world.setBounds(0, 0, 24000, 24000);
+    this.physics.world.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+
+    this.add.rectangle(SPAWN_X, SPAWN_Y, WORLD_WIDTH, WORLD_HEIGHT, 0x1f2933).setDepth(-10);
+    this.add
+      .rectangle(SPAWN_X, SPAWN_Y, WORLD_WIDTH, WORLD_HEIGHT, 0x000000, 0)
+      .setStrokeStyle(4, 0x06a77d, 0.4)
+      .setDepth(-9);
+    this.drawWorldGrid();
 
     // Player với tên từ character - spawn ở giữa bản đồ
-    this.player = new Player(this, 12000, 12000, character.id, character.name);
+    this.player = new Player(this, SPAWN_X, SPAWN_Y, character.id, character.name);
 
     // Setup camera
     const camera = this.cameras.main;
-    camera.setBounds(0, 0, 24000, 24000);
+    camera.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
     camera.startFollow(this.player);
     camera.setLerp(0.1, 0.1);
 
@@ -120,22 +116,14 @@ export class GameScene extends Phaser.Scene {
     });
     nameText.setScrollFactor(0);
 
-    const instructionText = this.add.text(10, 28, "WASD / Arrow keys to move • Walk to farm", {
+    const instructionText = this.add.text(10, 28, "WASD / Arrow keys to move", {
       fontSize: "11px",
       color: "#aaaaaa",
     });
     instructionText.setScrollFactor(0);
 
-    // HUD - Resources
-    this.resourcesUI = this.add.text(10, 46, "Resources Farmed: 0", {
-      fontSize: "13px",
-      color: "#ffff00",
-      fontStyle: "bold",
-    });
-    this.resourcesUI.setScrollFactor(0);
-
     // HUD - Coordinates (relative to map center)
-    this.coordinatesUI = this.add.text(10, 64, "Position: (0, 0)", {
+    this.coordinatesUI = this.add.text(10, 46, "Position: (0, 0)", {
       fontSize: "13px",
       color: "#00ffff",
       fontStyle: "bold",
@@ -172,6 +160,22 @@ export class GameScene extends Phaser.Scene {
         this.equipmentHUD.setActiveHotbar(i as HotbarSlot);
       });
     });
+  }
+
+  private drawWorldGrid() {
+    const grid = this.add.graphics().setDepth(-8);
+
+    grid.lineStyle(1, 0x334155, 0.55);
+    for (let x = 0; x <= WORLD_WIDTH; x += GRID_SIZE) {
+      grid.lineBetween(x, 0, x, WORLD_HEIGHT);
+    }
+    for (let y = 0; y <= WORLD_HEIGHT; y += GRID_SIZE) {
+      grid.lineBetween(0, y, WORLD_WIDTH, y);
+    }
+
+    grid.lineStyle(2, 0x06a77d, 0.7);
+    grid.lineBetween(SPAWN_X, 0, SPAWN_X, WORLD_HEIGHT);
+    grid.lineBetween(0, SPAWN_Y, WORLD_WIDTH, SPAWN_Y);
   }
 
   private setupSocket() {
@@ -245,70 +249,14 @@ export class GameScene extends Phaser.Scene {
     else if (data.animation?.includes("right")) remotePlayer.faceRight();
   }
 
-  // ─── AUTO FARM ────────────────────────────────────────────────────────────
-
-  private autoFarmCurrentTile() {
-    if (!this.player) return;
-
-    // Get tile at player position
-    const tile = TileMapService.getTileByPixel(this.tileMap, this.player.x, this.player.y);
-
-    if (!tile || !tile.isFarmable || tile.isDepleted) return;
-
-    // Check if it's a different tile or cooldown expired
-    if (
-      !this.lastFarmedTile ||
-      this.lastFarmedTile.x !== tile.x ||
-      this.lastFarmedTile.y !== tile.y ||
-      this.farmCooldown <= 0
-    ) {
-      // Damage the tile
-      TileMapService.damageTile(this.tileMap, tile.x, tile.y, 10);
-
-      Logger.info(
-        `Farmed tile at (${tile.x}, ${tile.y}) - Health: ${tile.health}/${tile.maxHealth}`,
-      );
-
-      // Update UI
-      this.totalResourcesMined += 1;
-      this.resourcesUI.setText(`Resources Farmed: ${this.totalResourcesMined}`);
-
-      // Update visual
-      this.tileMapRenderer.updateTileVisual(tile.x, tile.y);
-
-      // Update last farmed tile
-      this.lastFarmedTile = { x: tile.x, y: tile.y };
-      this.farmCooldown = this.FARM_COOLDOWN_TIME;
-    }
-  }
-
   // ─── UPDATE ───────────────────────────────────────────────────────────────
 
   update() {
     if (!this.player) return;
 
-    // Auto farm current tile
-    this.autoFarmCurrentTile();
-
-    // Decrease farm cooldown
-    this.farmCooldown -= this.game.loop.delta;
-
-    // Update tile regeneration and get regenerated tiles
-    const regeneratedTiles = TileMapService.updateTileRegeneration(this.tileMap);
-
-    // Update visual for regenerated tiles
-    regeneratedTiles.forEach((tile) => {
-      this.tileMapRenderer.updateTileVisual(tile.x, tile.y);
-    });
-
-    // Update visible tiles based on camera position (viewport culling)
-    this.tileMapRenderer.updateVisibleTiles(this.cameras.main);
-
     // Update player coordinates display
-    const gridX = Math.floor(this.player.x / 60);
-    const gridY = Math.floor(this.player.y / 60);
-    const relativeX = gridX - 200; // Center is at grid (200, 200)
-    const relativeY = gridY - 200;
+    const relativeX = Math.round(this.player.x - SPAWN_X);
+    const relativeY = Math.round(this.player.y - SPAWN_Y);
     this.coordinatesUI.setText(`Position: (${relativeX}, ${relativeY})`);
 
     const body = this.player.body as Phaser.Physics.Arcade.Body;
