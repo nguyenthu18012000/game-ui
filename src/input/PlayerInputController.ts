@@ -1,9 +1,13 @@
 import * as Phaser from "phaser";
-import type { Player } from "../entities/Player";
 
-const SPEED = 160;
+export type PlayerMovementAnimation = "walk-left" | "walk-right" | "idle-left" | "idle-right";
 
-export type PlayerMovementAnimation = "walk-left" | "walk-right" | "idle-right";
+export interface PlayerMovementInput {
+  directionX: number;
+  directionY: number;
+  animation: PlayerMovementAnimation;
+  moving: boolean;
+}
 
 export class PlayerInputController {
   private readonly cursors: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -13,8 +17,9 @@ export class PlayerInputController {
     left: Phaser.Input.Keyboard.Key;
     right: Phaser.Input.Keyboard.Key;
   };
+  private lastFacing: "left" | "right" = "right";
 
-  constructor(scene: Phaser.Scene, private readonly player: Player) {
+  constructor(scene: Phaser.Scene) {
     this.cursors = scene.input.keyboard!.createCursorKeys();
     this.wasd = {
       up: scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.W),
@@ -24,29 +29,37 @@ export class PlayerInputController {
     };
   }
 
-  update(): PlayerMovementAnimation {
-    const body = this.player.body as Phaser.Physics.Arcade.Body;
-    body.setVelocity(0, 0);
-
+  read(): PlayerMovementInput {
     const left = this.cursors.left.isDown || this.wasd.left.isDown;
     const right = this.cursors.right.isDown || this.wasd.right.isDown;
     const up = this.cursors.up.isDown || this.wasd.up.isDown;
     const down = this.cursors.down.isDown || this.wasd.down.isDown;
 
-    if (left) {
-      body.setVelocityX(-SPEED);
-      this.player.faceLeft();
-    } else if (right) {
-      body.setVelocityX(SPEED);
-      this.player.faceRight();
+    let directionX = 0;
+    let directionY = 0;
+    if (left) directionX -= 1;
+    if (right) directionX += 1;
+    if (up) directionY -= 1;
+    if (down) directionY += 1;
+
+    const length = Math.hypot(directionX, directionY);
+    if (length > 1) {
+      directionX /= length;
+      directionY /= length;
     }
-    if (up) body.setVelocityY(-SPEED);
-    if (down) body.setVelocityY(SPEED);
 
-    this.player.setMoving(left || right || up || down);
+    if (directionX < 0) this.lastFacing = "left";
+    else if (directionX > 0) this.lastFacing = "right";
 
-    if (left) return "walk-left";
-    if (right || up || down) return "walk-right";
-    return "idle-right";
+    const moving = directionX !== 0 || directionY !== 0;
+    const animation = moving
+      ? this.lastFacing === "left"
+        ? "walk-left"
+        : "walk-right"
+      : this.lastFacing === "left"
+        ? "idle-left"
+        : "idle-right";
+
+    return { directionX, directionY, animation, moving };
   }
 }

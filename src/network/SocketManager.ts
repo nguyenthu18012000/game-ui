@@ -1,4 +1,10 @@
-import { SOCKET_EVENTS } from "../constants/SocketEvents";
+import {
+  SOCKET_CONNECTION_EVENTS,
+  SOCKET_GAME_EVENTS,
+  normalizeSocketGameEvent,
+  type SocketGameEvent,
+  type SocketEvent,
+} from "../constants/SocketEvents";
 import { WEBSOCKET_SERVER_URL } from "../constants/GameConfig";
 import { Logger } from "../utils/logger";
 
@@ -15,7 +21,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 export class SocketManager {
   private socket: WebSocket | null = null;
   private connected = false;
-  private listeners = new Map<string, Set<SocketCallback>>();
+  private listeners = new Map<SocketEvent, Set<SocketCallback>>();
   private pendingMessages: string[] = [];
 
   constructor() {
@@ -38,19 +44,19 @@ export class SocketManager {
     this.socket.onopen = () => {
       this.connected = true;
       Logger.info("WebSocket connected");
-      this.dispatch(SOCKET_EVENTS.CONNECT);
+      this.dispatch(SOCKET_CONNECTION_EVENTS.CONNECT);
       this.flushPendingMessages();
     };
 
     this.socket.onclose = () => {
       this.connected = false;
       Logger.warn("WebSocket disconnected");
-      this.dispatch(SOCKET_EVENTS.DISCONNECT);
+      this.dispatch(SOCKET_CONNECTION_EVENTS.DISCONNECT);
     };
 
     this.socket.onerror = (error) => {
       Logger.error("WebSocket error", error);
-      this.dispatch(SOCKET_EVENTS.ERROR, error);
+      this.dispatch(SOCKET_CONNECTION_EVENTS.ERROR, error);
     };
 
     this.socket.onmessage = (message) => {
@@ -72,16 +78,19 @@ export class SocketManager {
       const message: SocketMessage = parsed;
 
       if (message.event && "payload" in message) {
-        this.dispatch(message.event, message.payload);
-        return;
+        const socketGameEvent = normalizeSocketGameEvent(message.event);
+        if (socketGameEvent) {
+          this.dispatch(socketGameEvent, message.payload);
+          return;
+        }
       }
 
       if (this.isMovePayload(message)) {
-        this.dispatch(SOCKET_EVENTS.PLAYER_MOVE, message);
+        this.dispatch(SOCKET_GAME_EVENTS.PLAYER_MOVE, message);
         return;
       }
 
-      this.dispatch(SOCKET_EVENTS.MESSAGE, message);
+      this.dispatch(SOCKET_CONNECTION_EVENTS.MESSAGE, message);
     } catch (error) {
       Logger.error("Failed to parse WebSocket message", error);
     }
@@ -98,7 +107,7 @@ export class SocketManager {
     );
   }
 
-  private dispatch(event: string, ...args: unknown[]) {
+  private dispatch(event: SocketEvent, ...args: unknown[]) {
     const callbacks = this.listeners.get(event);
     if (!callbacks) return;
 
@@ -116,7 +125,7 @@ export class SocketManager {
     return this.connected;
   }
 
-  emit(event: string, data: unknown) {
+  emit(event: SocketGameEvent, data: unknown) {
     const message = JSON.stringify({ event, payload: data });
 
     if (!this.socket) {
@@ -132,7 +141,7 @@ export class SocketManager {
     this.pendingMessages.push(message);
   }
 
-  on(event: string, callback: SocketCallback) {
+  on(event: SocketEvent, callback: SocketCallback) {
     if (!this.listeners.has(event)) {
       this.listeners.set(event, new Set());
     }
@@ -140,7 +149,7 @@ export class SocketManager {
     this.listeners.get(event)?.add(callback);
   }
 
-  once(event: string, callback: SocketCallback) {
+  once(event: SocketEvent, callback: SocketCallback) {
     const onceCallback: SocketCallback = (...args) => {
       this.off(event, onceCallback);
       callback(...args);
@@ -149,7 +158,7 @@ export class SocketManager {
     this.on(event, onceCallback);
   }
 
-  off(event: string, callback?: SocketCallback) {
+  off(event: SocketEvent, callback?: SocketCallback) {
     if (!callback) {
       this.listeners.delete(event);
       return;

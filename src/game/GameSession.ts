@@ -30,7 +30,7 @@ export class GameSession {
 
     this.createHud();
 
-    this.playerInput = new PlayerInputController(this.scene, player);
+    this.playerInput = new PlayerInputController(this.scene);
     this.networkController = new NetworkPlayerController(this.scene, player, this.character);
     this.networkController.connect();
     this.equipmentController = new EquipmentController(this.scene, player);
@@ -40,8 +40,8 @@ export class GameSession {
     if (this.destroyed || !this.player || !this.playerInput || !this.networkController) return;
 
     this.updatePosition();
-    const animation = this.playerInput.update();
-    this.networkController.sync(animation);
+    const input = this.playerInput.read();
+    this.networkController.update(input);
   }
 
   destroy() {

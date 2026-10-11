@@ -13,11 +13,11 @@ interface InputField {
 export class LobbyScene extends Phaser.Scene {
   private character: CharacterDetail | null = null;
   private characterNameInput!: InputField;
-  private createPopup?: Phaser.GameObjects.Container;
+  private createPopup?: Phaser.GameObjects.Container | undefined;
   private popupErrorText!: Phaser.GameObjects.Text;
   private isCreating = false;
   private isAlive = false;
-  private popupKeyListener?: (event: KeyboardEvent) => void;
+  private popupKeyListener?: ((event: KeyboardEvent) => void) | undefined;
 
   constructor() {
     super({ key: "LobbyScene" });
