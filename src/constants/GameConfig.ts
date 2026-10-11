@@ -3,11 +3,6 @@ import * as Phaser from "phaser";
 export const GAME_WIDTH = 1280;
 export const GAME_HEIGHT = 720;
 
-const trimTrailingSlash = (value: string) => value.replace(/\/+$/, "");
-
-export const SOCKET_SERVER_URL = trimTrailingSlash(
-  import.meta.env.VITE_SOCKET_SERVER_URL || "http://localhost:3000",
-);
 export const WEBSOCKET_SERVER_URL =
   import.meta.env.VITE_WEBSOCKET_SERVER_URL || "ws://localhost:8080/ws";
 

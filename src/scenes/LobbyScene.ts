@@ -13,9 +13,11 @@ interface InputField {
 export class LobbyScene extends Phaser.Scene {
   private character: CharacterDetail | null = null;
   private characterNameInput!: InputField;
-  private createPopup!: Phaser.GameObjects.Container;
+  private createPopup?: Phaser.GameObjects.Container | undefined;
   private popupErrorText!: Phaser.GameObjects.Text;
   private isCreating = false;
+  private isAlive = false;
+  private popupKeyListener?: ((event: KeyboardEvent) => void) | undefined;
 
   constructor() {
     super({ key: "LobbyScene" });
@@ -23,6 +25,9 @@ export class LobbyScene extends Phaser.Scene {
 
   create() {
     Logger.info("LobbyScene created");
+    this.isAlive = true;
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.cleanup());
+    this.events.once(Phaser.Scenes.Events.DESTROY, () => this.cleanup());
 
     const width = this.cameras.main.width;
     const height = this.cameras.main.height;
@@ -52,14 +57,23 @@ export class LobbyScene extends Phaser.Scene {
       this.scene.start("MenuScene");
     });
 
-    this.loadCharacter();
+    void this.loadCharacter();
   }
 
   private async loadCharacter() {
-    const character = await CharacterService.getDetail();
-    if (character) {
-      this.renderCharacter(character);
-    } else {
+    try {
+      const character = await CharacterService.getDetail();
+      if (!this.isAlive) return;
+
+      if (character) {
+        this.renderCharacter(character);
+      } else {
+        this.showCreatePopup();
+      }
+    } catch (error) {
+      if (!this.isAlive) return;
+      const message = error instanceof Error ? error.message : "Unknown error";
+      Logger.error("LobbyScene: Failed to load character", message);
       this.showCreatePopup();
     }
   }
@@ -85,6 +99,7 @@ export class LobbyScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
     startBtn.on("pointerdown", () => {
+      if (!this.character) return;
       Logger.info("LobbyScene: Starting game");
       this.scene.start("GameScene", { character: this.character });
     });
@@ -146,7 +161,7 @@ export class LobbyScene extends Phaser.Scene {
     createBtn.on("pointerout", () => createBtn.setFillStyle(0x06a77d));
     createBtn.on("pointerdown", () => this.handleCreateCharacter());
 
-    this.createPopup.add([
+    this.createPopup?.add([
       bg,
       title,
       this.characterNameInput.container,
@@ -185,7 +200,9 @@ export class LobbyScene extends Phaser.Scene {
   }
 
   private setupPopupKeyboard() {
-    this.input.keyboard?.on("keydown", (event: KeyboardEvent) => {
+    if (this.popupKeyListener) return;
+
+    this.popupKeyListener = (event: KeyboardEvent) => {
       if (!this.createPopup?.visible) return;
       const key = event.key;
 
@@ -198,7 +215,9 @@ export class LobbyScene extends Phaser.Scene {
         this.characterNameInput.value += key;
         this.updateInputDisplay();
       }
-    });
+    };
+
+    this.input.keyboard?.on("keydown", this.popupKeyListener);
   }
 
   private updateInputDisplay() {
@@ -231,6 +250,8 @@ export class LobbyScene extends Phaser.Scene {
 
     try {
       const ok = await CharacterService.create(name);
+      if (!this.isAlive) return;
+
       if (!ok) {
         this.popupErrorText.setColor("#e74c3c");
         this.popupErrorText.setText("Tạo nhân vật thất bại, thử lại");
@@ -239,16 +260,35 @@ export class LobbyScene extends Phaser.Scene {
 
       // Fetch detail and render
       const character = await CharacterService.getDetail();
+      if (!this.isAlive) return;
+
       if (character) {
-        this.createPopup.destroy();
+        this.destroyCreatePopup();
         this.renderCharacter(character);
       }
     } catch (error: unknown) {
+      if (!this.isAlive) return;
       const message = error instanceof Error ? error.message : "Unknown error";
       this.popupErrorText.setColor("#e74c3c");
       this.popupErrorText.setText("Lỗi: " + message);
     } finally {
       this.isCreating = false;
     }
+  }
+
+  private destroyCreatePopup() {
+    if (this.popupKeyListener) {
+      this.input.keyboard?.off("keydown", this.popupKeyListener);
+      this.popupKeyListener = undefined;
+    }
+
+    this.createPopup?.destroy();
+    this.createPopup = undefined;
+  }
+
+  private cleanup() {
+    if (!this.isAlive) return;
+    this.isAlive = false;
+    this.destroyCreatePopup();
   }
 }

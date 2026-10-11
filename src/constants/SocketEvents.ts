@@ -1,39 +1,26 @@
-// Connection Events
-export const SOCKET_EVENTS = {
+export const SOCKET_CONNECTION_EVENTS = {
   CONNECT: "connect",
   DISCONNECT: "disconnect",
   ERROR: "error",
   MESSAGE: "message",
+} as const;
 
-  // Player Events
-  PLAYER_JOIN: "player-join",
-  PLAYER_LEAVE: "player-leave",
-  PLAYERS_LIST: "players-list",
-  PLAYER_UPDATE: "player-update",
+export const SOCKET_GAME_EVENTS = {
+  PLAYER_LEAVE: "PLAYER_LEAVE",
+  PLAYER_MOVE: "PLAYER_MOVE",
+} as const;
 
-  // Movement Events
-  PLAYER_MOVE: "MOVE",
-  PLAYER_POSITION: "player-position",
+export type SocketConnectionEvent =
+  (typeof SOCKET_CONNECTION_EVENTS)[keyof typeof SOCKET_CONNECTION_EVENTS];
 
-  // Equipment Events
-  PLAYER_EQUIP_CHANGED: "player-equip-changed",
-  EQUIPMENT_UPDATE: "equipment-update",
+export type SocketGameEvent = (typeof SOCKET_GAME_EVENTS)[keyof typeof SOCKET_GAME_EVENTS];
 
-  // Combat Events
-  PLAYER_ATTACK: "player-attack",
-  PLAYER_DAMAGE: "player-damage",
-  PLAYER_DEATH: "player-death",
+export type SocketEvent = SocketConnectionEvent | SocketGameEvent;
 
-  // Chat Events
-  CHAT_MESSAGE: "chat-message",
-  CHAT_RECEIVE: "chat-receive",
+export const normalizeSocketGameEvent = (event: string): SocketGameEvent | null => {
+  if (Object.values(SOCKET_GAME_EVENTS).includes(event as SocketGameEvent)) {
+    return event as SocketGameEvent;
+  }
 
-  // Notification Events
-  NOTIFICATION_SEND: "notification-send",
-  NOTIFICATION_RECEIVE: "notification-receive",
-
-  // Game State
-  GAME_STATE_UPDATE: "game-state-update",
-  GAME_STARTED: "game-started",
-  GAME_ENDED: "game-ended",
+  return null;
 };

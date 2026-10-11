@@ -1,5 +1,6 @@
 import * as Phaser from "phaser";
 import { Logger } from "../utils/logger";
+import type { EquipmentItem } from "../types/Equipment";
 
 // ─── Asset keys ───────────────────────────────────────────────────────────────
 
@@ -167,6 +168,24 @@ export class Player extends Phaser.GameObjects.Container {
     this.bodySprite.setFlipX(false);
     this.legSprite.setFlipX(false);
     this.drawWeapon();
+  }
+
+  equip(item: EquipmentItem) {
+    if (item.slot === "body") {
+      this.equipBody(item.spriteKey, item.animPrefix, item.assetFolder);
+      return;
+    }
+
+    this.equipLegs(item.spriteKey, item.animPrefix, item.assetFolder);
+  }
+
+  unequip(slot: EquipmentItem["slot"]) {
+    if (slot === "body") {
+      this.equipBody(null, null);
+      return;
+    }
+
+    this.equipLegs(null, null);
   }
 
   equipBody(

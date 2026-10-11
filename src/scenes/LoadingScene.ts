@@ -1,6 +1,7 @@
 import * as Phaser from "phaser";
 import { Logger } from "../utils/logger";
 import { TokenService } from "../services/TokenService";
+import { AuthService } from "../services/AuthService";
 import { PLAYER_ASSET_KEYS, ANIM_FRAME_COUNT } from "../entities/Player";
 import { EQUIPMENT_ASSET_KEYS } from "../types/Equipment";
 
@@ -28,6 +29,8 @@ import eq2BodyIcon from "../assets/equipment/equipment2/equipment_body.png";
 import eq2LegIcon from "../assets/equipment/equipment2/equipment_leg.png";
 
 export class LoadingScene extends Phaser.Scene {
+  private isAlive = false;
+
   constructor() {
     super({ key: "LoadingScene" });
   }
@@ -76,16 +79,40 @@ export class LoadingScene extends Phaser.Scene {
 
   create() {
     Logger.info("LoadingScene: Checking token");
+    this.isAlive = true;
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.isAlive = false;
+    });
+    this.events.once(Phaser.Scenes.Events.DESTROY, () => {
+      this.isAlive = false;
+    });
 
+    void this.routeByAuthState();
+  }
+
+  private async routeByAuthState() {
     const token = TokenService.getAccessToken();
 
-    if (!token || TokenService.isTokenExpired()) {
-      Logger.info("LoadingScene: No valid token → LoginScene");
-      TokenService.clearTokens();
-      this.scene.start("LoginScene");
-    } else {
+    if (token && !TokenService.isTokenExpired()) {
       Logger.info("LoadingScene: Token valid → LobbyScene");
       this.scene.start("LobbyScene");
+      return;
     }
+
+    if (TokenService.getRefreshToken()) {
+      Logger.info("LoadingScene: Access token expired, trying refresh");
+      const refreshed = await AuthService.refreshAccessToken();
+      if (!this.isAlive) return;
+
+      if (refreshed.success && !TokenService.isTokenExpired()) {
+        Logger.info("LoadingScene: Token refreshed → LobbyScene");
+        this.scene.start("LobbyScene");
+        return;
+      }
+    }
+
+    Logger.info("LoadingScene: No valid token → LoginScene");
+    TokenService.clearTokens();
+    this.scene.start("LoginScene");
   }
 }
